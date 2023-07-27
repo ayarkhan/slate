@@ -244,8 +244,8 @@ ifeq ($(blas),mkl)
     ifeq ($(CXX),icpc)
         blas_fortran = ifort
     endif
-    # BLAS is Intel MKL and SLATE is using the SYCL backend
-    # Use ifort, threaded-blas and mkl_intel_thread
+    # BLAS is Intel MKL and using SYCL backend
+    # Use ifort and oneMKL with mkl_intel_thread, threaded blas
     ifeq ($(gpu_backend),sycl)
         blas_fortran = ifort
         blas_threaded = 1
