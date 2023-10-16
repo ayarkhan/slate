@@ -15,7 +15,7 @@ namespace slate {
 
 namespace device {
 
-// CUBLAS/ROCBLAS need complex translation, others do not
+// CUBLAS/ROCBLAS/SYCL need complex translation, others do not
 #if ! defined( SLATE_HAVE_OMPTARGET)
 
 template <>
@@ -39,6 +39,14 @@ void geadd(
           (hipFloatComplex*) A, lda,
           make_hipFloatComplex(beta.real(), beta.imag()),
           (hipFloatComplex*) B, ldb,
+          queue);
+
+#elif defined( SLATE_HAVE_SYCL_KERNELS )
+    geadd(m, n,
+          sycl::float2(alpha.real(), alpha.imag()),
+          (sycl::float2*) A, lda,
+          sycl::float2(beta.real(), beta.imag()),
+          (sycl::float2*) B, ldb,
           queue);
 #endif
 }
@@ -64,6 +72,14 @@ void geadd(
           (hipDoubleComplex*) A, lda,
           make_hipDoubleComplex(beta.real(), beta.imag()),
           (hipDoubleComplex*) B, ldb,
+          queue);
+
+#elif defined( SLATE_HAVE_SYCL_KERNELS )
+    geadd(m, n,
+          sycl::double2(alpha.real(), alpha.imag()),
+          (sycl::double2*) A, lda,
+          sycl::double2(beta.real(), beta.imag()),
+          (sycl::double2*) B, ldb,
           queue);
 #endif
 }
@@ -94,7 +110,7 @@ void geadd(
 //==============================================================================
 namespace batch {
 
-// CUBLAS/ROCBLAS need complex translation, others do not
+// CUBLAS/ROCBLAS/SYCL need complex translation, others do not
 #if ! defined( SLATE_HAVE_OMPTARGET )
 
 template <>
@@ -118,6 +134,14 @@ void geadd(
           (hipFloatComplex**) Aarray, lda,
           make_hipFloatComplex(beta.real(), beta.imag()),
           (hipFloatComplex**) Barray, ldb,
+          batch_count, queue);
+
+#elif defined( SLATE_HAVE_SYCL_KERNELS )
+    geadd(m, n,
+          sycl::float2(alpha.real(), alpha.imag()),
+          (sycl::float2**) Aarray, lda,
+          sycl::float2(beta.real(), beta.imag()),
+          (sycl::float2**) Barray, ldb,
           batch_count, queue);
 #endif
 }
@@ -143,6 +167,14 @@ void geadd(
           (hipDoubleComplex**) Aarray, lda,
           make_hipDoubleComplex(beta.real(), beta.imag()),
           (hipDoubleComplex**) Barray, ldb,
+          batch_count, queue);
+
+#elif defined( SLATE_HAVE_SYCL_KERNELS )
+    geadd(m, n,
+          sycl::double2(alpha.real(), alpha.imag()),
+          (sycl::double2**) Aarray, lda,
+          sycl::double2(beta.real(), beta.imag()),
+          (sycl::double2**) Barray, ldb,
           batch_count, queue);
 #endif
 }

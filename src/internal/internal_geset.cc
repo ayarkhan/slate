@@ -19,7 +19,7 @@ namespace slate {
 namespace device {
 
 //------------------------------------------------------------------------------
-// CUBLAS/ROCBLAS need complex translation, others do not
+// CUBLAS/ROCBLAS/SYCL need complex translation, others do not
 #if ! defined( SLATE_HAVE_OMPTARGET )
 
 // device single tile routine
@@ -42,6 +42,13 @@ void geset(
           make_hipFloatComplex( offdiag_value.real(), offdiag_value.imag() ),
           make_hipFloatComplex( diag_value.real(), diag_value.imag() ),
           (hipFloatComplex*) A, lda,
+          queue);
+
+#elif defined( SLATE_HAVE_SYCL_KERNELS )
+    geset(m, n,
+          sycl::float2( offdiag_value.real(), offdiag_value.imag() ),
+          sycl::float2( diag_value.real(), diag_value.imag() ),
+          (sycl::float2*) A, lda,
           queue);
 #endif
 }
@@ -66,6 +73,13 @@ void geset(
           make_hipDoubleComplex( offdiag_value.real(), offdiag_value.imag() ),
           make_hipDoubleComplex( diag_value.real(), diag_value.imag() ),
           (hipDoubleComplex*) A, lda,
+          queue);
+
+#elif defined( SLATE_HAVE_SYCL_KERNELS )
+    geset(m, n,
+          sycl::double2( offdiag_value.real(), offdiag_value.imag() ),
+          sycl::double2( diag_value.real(), diag_value.imag() ),
+          (sycl::double2*) A, lda,
           queue);
 #endif
 }
@@ -97,7 +111,7 @@ void geset(
 namespace batch {
 
 //------------------------------------------------------------------------------
-// CUBLAS/ROCBLAS need complex translation, others do not
+// CUBLAS/ROCBLAS/SYCL need complex translation, others do not
 #if ! defined( SLATE_HAVE_OMPTARGET )
 
 // device::batch routine
@@ -120,6 +134,13 @@ void geset(
           make_hipFloatComplex( offdiag_value.real(), offdiag_value.imag() ),
           make_hipFloatComplex( diag_value.real(), diag_value.imag() ),
           (hipFloatComplex**) Aarray, lda,
+          batch_count, queue);
+
+#elif defined( SLATE_HAVE_SYCL_KERNELS )
+    geset(m, n,
+          sycl::float2( offdiag_value.real(), offdiag_value.imag() ),
+          sycl::float2( diag_value.real(), diag_value.imag() ),
+          (sycl::float2**) Aarray, lda,
           batch_count, queue);
 #endif
 }
@@ -144,6 +165,13 @@ void geset(
           make_hipDoubleComplex( offdiag_value.real(), offdiag_value.imag() ),
           make_hipDoubleComplex( diag_value.real(), diag_value.imag() ),
           (hipDoubleComplex**) Aarray, lda,
+          batch_count, queue);
+
+#elif defined( SLATE_HAVE_SYCL_KERNELS )
+    geset(m, n,
+          sycl::double2( offdiag_value.real(), offdiag_value.imag() ),
+          sycl::double2( diag_value.real(), diag_value.imag() ),
+          (sycl::double2**) Aarray, lda,
           batch_count, queue);
 #endif
 }

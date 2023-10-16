@@ -20,7 +20,7 @@ namespace slate {
 // cu*Complex in .cu files, and cast from std::complex here.
 namespace device {
 
-// CUBLAS/ROCBLAS need complex translation, others do not
+// CUBLAS/ROCBLAS/SYCL need complex translation, others do not
 #if ! defined( SLATE_HAVE_OMPTARGET)
 
 template <>
@@ -35,6 +35,9 @@ void transpose(
 
 #elif defined( BLAS_HAVE_ROCBLAS )
     transpose(is_conj, n, (hipFloatComplex*) A, lda, queue);
+
+#elif defined( SLATE_HAVE_SYCL_KERNELS )
+    transpose(is_conj, n, (sycl::float2*) A, lda, queue);
 #endif
 }
 
@@ -50,6 +53,9 @@ void transpose(
 
 #elif defined( BLAS_HAVE_ROCBLAS )
     transpose(is_conj, n, (hipDoubleComplex*) A, lda, queue);
+
+#elif defined( SLATE_HAVE_SYCL_KERNELS )
+    transpose(is_conj, n, (sycl::double2*) A, lda, queue);
 #endif
 }
 
@@ -67,6 +73,9 @@ void transpose_batch(
 
 #elif defined( BLAS_HAVE_ROCBLAS )
     transpose_batch(is_conj, n, (hipFloatComplex**) Aarray, lda, batch_count, queue);
+
+#elif defined( SLATE_HAVE_SYCL_KERNELS )
+    transpose_batch(is_conj, n, (sycl::float2**) Aarray, lda, batch_count, queue);
 #endif
 }
 
@@ -83,6 +92,9 @@ void transpose_batch(
 
 #elif defined( BLAS_HAVE_ROCBLAS )
     transpose_batch(is_conj, n, (hipDoubleComplex**) Aarray, lda, batch_count, queue);
+
+#elif defined( SLATE_HAVE_SYCL_KERNELS )
+    transpose_batch(is_conj, n, (sycl::double2**) Aarray, lda, batch_count, queue);
 #endif
 }
 
@@ -104,6 +116,11 @@ void transpose(
     transpose(is_conj, m, n,
               (hipFloatComplex*) A, lda,
               (hipFloatComplex*) AT, ldat, queue);
+
+#elif defined( SLATE_HAVE_SYCL_KERNELS )
+    transpose(is_conj, m, n,
+              (sycl::float2*) A, lda,
+              (sycl::float2*) AT, ldat, queue);
 #endif
 }
 
@@ -124,6 +141,11 @@ void transpose(
     transpose(is_conj, m, n,
               (hipDoubleComplex*) A, lda,
               (hipDoubleComplex*) AT, ldat, queue);
+
+#elif defined( SLATE_HAVE_SYCL_KERNELS )
+    transpose(is_conj, m, n,
+              (sycl::double2*) A, lda,
+              (sycl::double2*) AT, ldat, queue);
 #endif
 }
 
@@ -146,6 +168,11 @@ void transpose_batch(
     transpose_batch(is_conj, m, n,
                     (hipFloatComplex**) Aarray, lda,
                     (hipFloatComplex**) ATarray, ldat, batch_count, queue);
+
+#elif defined( SLATE_HAVE_SYCL_KERNELS )
+    transpose_batch(is_conj, m, n,
+                    (sycl::float2**) Aarray, lda,
+                    (sycl::float2**) ATarray, ldat, batch_count, queue);
 #endif
 }
 
@@ -167,6 +194,11 @@ void transpose_batch(
     transpose_batch(is_conj, m, n,
                     (hipDoubleComplex**) Aarray, lda,
                     (hipDoubleComplex**) ATarray, ldat, batch_count, queue);
+
+#elif defined( SLATE_HAVE_SYCL_KERNELS )
+    transpose_batch(is_conj, m, n,
+                    (sycl::double2**) Aarray, lda,
+                    (sycl::double2**) ATarray, ldat, batch_count, queue);
 #endif
 }
 

@@ -15,7 +15,7 @@
 namespace slate {
 namespace device {
 
-// CUBLAS/ROCBLAS need complex translation, others do not
+// CUBLAS/ROCBLAS/SYCL need complex translation, others do not
 #if ! defined( SLATE_HAVE_OMPTARGET )
 
 template <>
@@ -32,11 +32,19 @@ void tzcopy(
            (cuFloatComplex**) Aarray, lda,
            (cuFloatComplex**) Barray, ldb,
            batch_count, queue);
+
 #elif defined( BLAS_HAVE_ROCBLAS )
     tzcopy(uplo,
            m, n,
            (hipFloatComplex**) Aarray, lda,
            (hipFloatComplex**) Barray, ldb,
+           batch_count, queue);
+
+#elif defined( SLATE_HAVE_SYCL_KERNELS )
+    tzcopy(uplo,
+           m, n,
+           (sycl::float2**) Aarray, lda,
+           (sycl::float2**) Barray, ldb,
            batch_count, queue);
 #endif
 }
@@ -55,11 +63,19 @@ void tzcopy(
            (cuFloatComplex**) Aarray, lda,
            (cuDoubleComplex**) Barray, ldb,
            batch_count, queue);
+
 #elif defined( BLAS_HAVE_ROCBLAS )
     tzcopy(uplo,
            m, n,
            (hipFloatComplex**) Aarray, lda,
            (hipDoubleComplex**) Barray, ldb,
+           batch_count, queue);
+
+#elif defined( SLATE_HAVE_SYCL_KERNELS )
+    tzcopy(uplo,
+           m, n,
+           (sycl::float2**) Aarray, lda,
+           (sycl::double2**) Barray, ldb,
            batch_count, queue);
 #endif
 }
@@ -78,11 +94,19 @@ void tzcopy(
            (cuDoubleComplex**) Aarray, lda,
            (cuDoubleComplex**) Barray, ldb,
            batch_count, queue);
+
 #elif defined( BLAS_HAVE_ROCBLAS )
     tzcopy(uplo,
            m, n,
            (hipDoubleComplex**) Aarray, lda,
            (hipDoubleComplex**) Barray, ldb,
+           batch_count, queue);
+
+#elif defined( SLATE_HAVE_SYCL_KERNELS )
+    tzcopy(uplo,
+           m, n,
+           (sycl::double2**) Aarray, lda,
+           (sycl::double2**) Barray, ldb,
            batch_count, queue);
 #endif
 }
@@ -101,11 +125,19 @@ void tzcopy(
            (cuDoubleComplex**) Aarray, lda,
            (cuFloatComplex**) Barray, ldb,
            batch_count, queue);
+
 #elif defined( BLAS_HAVE_ROCBLAS )
     tzcopy(uplo,
            m, n,
            (hipDoubleComplex**) Aarray, lda,
            (hipFloatComplex**) Barray, ldb,
+           batch_count, queue);
+
+#elif defined( SLATE_HAVE_SYCL_KERNELS )
+    tzcopy(uplo,
+           m, n,
+           (sycl::double2**) Aarray, lda,
+           (sycl::float2**) Barray, ldb,
            batch_count, queue);
 #endif
 }

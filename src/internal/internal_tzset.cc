@@ -19,7 +19,7 @@ namespace slate {
 namespace device {
 
 //------------------------------------------------------------------------------
-// CUBLAS/ROCBLAS need complex translation, others do not
+// CUBLAS/ROCBLAS/SYCL need complex translation, others do not
 #if ! defined( SLATE_HAVE_OMPTARGET )
 
 // device single tile routine
@@ -45,6 +45,14 @@ void tzset(
         make_hipFloatComplex( offdiag_value.real(), offdiag_value.imag() ),
         make_hipFloatComplex( diag_value.real(), diag_value.imag() ),
         (hipFloatComplex*) A, lda,
+        queue);
+
+#elif defined( SLATE_HAVE_SYCL_KERNELS )
+    tzset(
+        uplo, m, n,
+        sycl::float2( offdiag_value.real(), offdiag_value.imag() ),
+        sycl::float2( diag_value.real(), diag_value.imag() ),
+        (sycl::float2*) A, lda,
         queue);
 #endif
 }
@@ -72,6 +80,14 @@ void tzset(
         make_hipDoubleComplex( offdiag_value.real(), offdiag_value.imag() ),
         make_hipDoubleComplex( diag_value.real(), diag_value.imag() ),
         (hipDoubleComplex*) A, lda,
+        queue);
+
+#elif defined( SLATE_HAVE_SYCL_KERNELS )
+    tzset(
+        uplo, m, n,
+        sycl::double2( offdiag_value.real(), offdiag_value.imag() ),
+        sycl::double2( diag_value.real(), diag_value.imag() ),
+        (sycl::double2*) A, lda,
         queue);
 #endif
 }

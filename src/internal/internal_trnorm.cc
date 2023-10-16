@@ -21,7 +21,7 @@ namespace slate {
 // cu*Complex in .cu files, and cast from std::complex here.
 namespace device {
 
-// CUBLAS/ROCBLAS need complex translation, others do not
+// CUBLAS/ROCBLAS/SYCL need complex translation, others do not
 #if ! defined( SLATE_HAVE_OMPTARGET )
 
 template <>
@@ -39,6 +39,10 @@ void trnorm(
 
 #elif defined( BLAS_HAVE_ROCBLAS )
     trnorm(in_norm, uplo, diag, m, n, (hipFloatComplex**) Aarray, lda,
+           values, ldv, batch_count, queue);
+
+#elif defined( SLATE_HAVE_SYCL_KERNELS )
+    trnorm(in_norm, uplo, diag, m, n, (sycl::float2**) Aarray, lda,
            values, ldv, batch_count, queue);
 #endif
 }
@@ -58,6 +62,10 @@ void trnorm(
 
 #elif defined( BLAS_HAVE_ROCBLAS )
     trnorm(in_norm, uplo, diag, m, n, (hipDoubleComplex**) Aarray, lda,
+           values, ldv, batch_count, queue);
+
+#elif defined( SLATE_HAVE_SYCL_KERNELS )
+    trnorm(in_norm, uplo, diag, m, n, (sycl::double2**) Aarray, lda,
            values, ldv, batch_count, queue);
 #endif
 }

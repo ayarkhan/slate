@@ -31,7 +31,7 @@ void transpose_batch(
     throw std::exception();  // not implemented
 }
 
-// CUBLAS/ROCBLAS need complex translation, others do not
+// CUBLAS/ROCBLAS/SYCL need complex translation, others do not
 #if ! defined( SLATE_HAVE_OMPTARGET )
 
 // complex-float => complex-float
@@ -52,6 +52,12 @@ void gecopy(
     gecopy(m, n,
            (hipFloatComplex**) Aarray, lda,
            (hipFloatComplex**) Barray, ldb,
+           batch_count, queue);
+
+#elif defined( SLATE_HAVE_SYCL_KERNELS )
+    gecopy(m, n,
+           (sycl::float2**) Aarray, lda,
+           (sycl::float2**) Barray, ldb,
            batch_count, queue);
 #endif
 }
@@ -75,6 +81,12 @@ void gecopy(
            (hipFloatComplex**) Aarray, lda,
            (hipDoubleComplex**) Barray, ldb,
            batch_count, queue);
+
+#elif defined( SLATE_HAVE_SYCL_KERNELS )
+    gecopy(m, n,
+           (sycl::float2**) Aarray, lda,
+           (sycl::double2**) Barray, ldb,
+           batch_count, queue);
 #endif
 }
 
@@ -96,6 +108,12 @@ void gecopy(
     gecopy(m, n,
            (hipDoubleComplex**) Aarray, lda,
            (hipDoubleComplex**) Barray, ldb,
+           batch_count, queue);
+
+#elif defined( SLATE_HAVE_SYCL_KERNELS )
+    gecopy(m, n,
+           (sycl::double2**) Aarray, lda,
+           (sycl::double2**) Barray, ldb,
            batch_count, queue);
 #endif
 }
@@ -119,6 +137,12 @@ void gecopy(
            (hipDoubleComplex**) Aarray, lda,
            (hipFloatComplex**) Barray, ldb,
            batch_count, queue);
+
+#elif defined( SLATE_HAVE_SYCL_KERNELS )
+    gecopy(m, n,
+           (sycl::double2**) Aarray, lda,
+           (sycl::float2**) Barray, ldb,
+           batch_count, queue);
 #endif
 }
 
@@ -141,6 +165,12 @@ void gecopy(
             (float**) Aarray, lda,
             (hipFloatComplex**) Barray, ldb,
             batch_count, queue );
+
+#elif defined( SLATE_HAVE_SYCL_KERNELS )
+    gecopy( m, n,
+            (float**) Aarray, lda,
+            (sycl::float2**) Barray, ldb,
+            batch_count, queue );
 #endif
 }
 
@@ -162,6 +192,12 @@ void gecopy(
     gecopy( m, n,
             (double**) Aarray, lda,
             (hipDoubleComplex**) Barray, ldb,
+            batch_count, queue );
+
+#elif defined( SLATE_HAVE_SYCL_KERNELS )
+    gecopy( m, n,
+            (double**) Aarray, lda,
+            (sycl::double2**) Barray, ldb,
             batch_count, queue );
 #endif
 }

@@ -14,7 +14,7 @@
 namespace slate {
 namespace device {
 
-// CUBLAS/ROCBLAS need complex translation, others do not
+// CUBLAS/ROCBLAS/SYCL need complex translation, others do not
 #if ! defined( SLATE_HAVE_OMPTARGET )
 
 template <>
@@ -35,6 +35,12 @@ void tzscale(
     tzscale(uplo, m, n,
             numer, denom,
             (hipFloatComplex**) Aarray, lda,
+            batch_count, queue);
+
+#elif defined( SLATE_HAVE_SYCL_KERNELS )
+    tzscale(uplo, m, n,
+            numer, denom,
+            (sycl::float2**) Aarray, lda,
             batch_count, queue);
 #endif
 }
@@ -57,6 +63,12 @@ void tzscale(
     tzscale(uplo, m, n,
             numer, denom,
             (hipDoubleComplex**) Aarray, lda,
+            batch_count, queue);
+
+#elif defined( SLATE_HAVE_SYCL_KERNELS )
+    tzscale(uplo, m, n,
+            numer, denom,
+            (sycl::double2**) Aarray, lda,
             batch_count, queue);
 #endif
 }

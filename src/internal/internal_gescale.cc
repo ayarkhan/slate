@@ -16,7 +16,7 @@ namespace slate {
 namespace device {
 
 //------------------------------------------------------------------------------
-// CUBLAS/ROCBLAS need complex translation, others do not
+// CUBLAS/ROCBLAS/SYCL need complex translation, others do not
 #if ! defined( SLATE_HAVE_OMPTARGET )
 
 // device single tile routine
@@ -37,6 +37,12 @@ void gescale(
     gescale(m, n,
             numer, denom,
             (hipFloatComplex*) A, lda,
+            queue);
+
+#elif defined( SLATE_HAVE_SYCL_KERNELS )
+    gescale(m, n,
+            numer, denom,
+            (sycl::float2*) A, lda,
             queue);
 #endif
 }
@@ -61,6 +67,13 @@ void gescale(
             make_hipFloatComplex( denom.real(), denom.imag() ),
             (hipFloatComplex*) A, lda,
             queue);
+
+#elif defined( SLATE_HAVE_SYCL_KERNELS )
+    gescale(m, n,
+            sycl::float2( numer.real(), numer.imag() ),
+            sycl::float2( denom.real(), denom.imag() ),
+            (sycl::float2*) A, lda,
+            queue);
 #endif
 }
 
@@ -81,6 +94,12 @@ void gescale(
     gescale(m, n,
             numer, denom,
             (hipDoubleComplex*) A, lda,
+            queue);
+
+#elif defined( SLATE_HAVE_SYCL_KERNELS )
+    gescale(m, n,
+            numer, denom,
+            (sycl::double2*) A, lda,
             queue);
 #endif
 }
@@ -104,6 +123,13 @@ void gescale(
             make_hipDoubleComplex( numer.real(), numer.imag() ),
             make_hipDoubleComplex( denom.real(), denom.imag() ),
             (hipDoubleComplex*) A, lda,
+            queue);
+
+#elif defined( SLATE_HAVE_SYCL_KERNELS )
+    gescale(m, n,
+            sycl::double2( numer.real(), numer.imag() ),
+            sycl::double2( denom.real(), denom.imag() ),
+            (sycl::double2*) A, lda,
             queue);
 #endif
 }
@@ -154,6 +180,12 @@ void gescale(
             numer, denom,
             (hipFloatComplex**) Aarray, lda,
             batch_count, queue);
+
+#elif defined( SLATE_HAVE_SYCL_KERNELS )
+    gescale(m, n,
+            numer, denom,
+            (sycl::float2**) Aarray, lda,
+            batch_count, queue);
 #endif
 }
 
@@ -177,6 +209,13 @@ void gescale(
             make_hipFloatComplex( denom.real(), denom.imag() ),
             (hipFloatComplex**) Aarray, lda,
             batch_count, queue);
+
+#elif defined( SLATE_HAVE_SYCL_KERNELS )
+    gescale(m, n,
+            sycl::float2( numer.real(), numer.imag() ),
+            sycl::float2( denom.real(), denom.imag() ),
+            (sycl::float2**) Aarray, lda,
+            batch_count, queue);
 #endif
 }
 
@@ -197,6 +236,12 @@ void gescale(
     gescale(m, n,
             numer, denom,
             (hipDoubleComplex**) Aarray, lda,
+            batch_count, queue);
+
+#elif defined( SLATE_HAVE_SYCL_KERNELS )
+    gescale(m, n,
+            numer, denom,
+            (sycl::double2**) Aarray, lda,
             batch_count, queue);
 #endif
 }
@@ -220,6 +265,13 @@ void gescale(
             make_hipDoubleComplex( numer.real(), numer.imag() ),
             make_hipDoubleComplex( denom.real(), denom.imag() ),
             (hipDoubleComplex**) Aarray, lda,
+            batch_count, queue);
+
+#elif defined( SLATE_HAVE_SYCL_KERNELS )
+    gescale(m, n,
+            sycl::double2( numer.real(), numer.imag() ),
+            sycl::double2( denom.real(), denom.imag() ),
+            (sycl::double2**) Aarray, lda,
             batch_count, queue);
 #endif
 }
