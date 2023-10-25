@@ -4,11 +4,9 @@
 // the terms of the BSD 3-Clause license. See the accompanying LICENSE file.
 
 #include <sycl/sycl.hpp>
-#include <dpct/dpct.hpp>
 #include "slate/Exception.hh"
 #include "slate/internal/device.hh"
 
-/* DPCT_ORIG #include "device_util.cuh"*/
 #include "device_util.dp.hpp"
 
 #include <cstdio>
@@ -43,38 +41,27 @@ namespace device {
 ///     On exit, tiles_maxima[k] = max_{i, j} abs( A^(k)_(i, j) )
 ///     for tile A^(k).
 ///
-/* DPCT_ORIG template <typename scalar_t>
-__global__ void genorm_max_kernel(
-    int64_t m, int64_t n,
-    scalar_t const* const* Aarray, int64_t lda,
-    blas::real_type<scalar_t>* tiles_maxima)*/
-
-
 template <typename scalar_t>
-void genorm_max_kernel(int64_t m, int64_t n, scalar_t const *const *Aarray,
-                       int64_t lda, blas::real_type<scalar_t> *tiles_maxima,
-                       const sycl::nd_item<3> &item_ct1, uint8_t *dpct_local)
+void genorm_max_kernel(
+    int64_t m, int64_t n,
+    scalar_t const *const *Aarray, int64_t lda,
+    blas::real_type<scalar_t> *tiles_maxima,
+    const sycl::nd_item<3> &item_ct1, uint8_t *dpct_local)
 {
     using real_t = blas::real_type<scalar_t>;
-/* DPCT_ORIG     scalar_t const* tile = Aarray[ blockIdx.x ]*/
     scalar_t const *tile = Aarray[item_ct1.get_group(2)];
 
     // Save partial results in shared memory.
-/* DPCT_ORIG     extern __shared__ char dynamic_data[]*/
     auto dynamic_data = (char *)dpct_local;
     real_t* row_max = (real_t*) dynamic_data;
     int chunk;
-/* DPCT_ORIG     if (threadIdx.x < blockDim.x) {*/
     if (item_ct1.get_local_id(2) < item_ct1.get_local_range(2)) {
-/* DPCT_ORIG         row_max[threadIdx.x] = 0*/
         row_max[item_ct1.get_local_id(2)] = 0;
     }
 
     // This does coalesced reads of one column at a time in parallel.
-/* DPCT_ORIG     for (int i = threadIdx.x; i < m; i += blockDim.x) {*/
     for (int i = item_ct1.get_local_id(2); i < m;
          i += item_ct1.get_local_range(2)) {
-/* DPCT_ORIG         chunk = i % blockDim.x*/
         chunk = i % item_ct1.get_local_range(2);
         scalar_t const* row = &tile[ i ];
         real_t max = 0;
@@ -88,19 +75,10 @@ void genorm_max_kernel(int64_t m, int64_t n, scalar_t const *const *Aarray,
     }
 
     // Reduction to find max of tile.
-/* DPCT_ORIG     __syncthreads()*/
-    /*
-    DPCT1065:36: Consider replacing sycl::nd_item::barrier() with
-    sycl::nd_item::barrier(sycl::access::fence_space::local_space) for better
-    performance if there is no access to global memory.
-    */
     item_ct1.barrier();
-/* DPCT_ORIG     max_nan_reduce(blockDim.x, threadIdx.x, row_max)*/
     max_nan_reduce(item_ct1.get_local_range(2), item_ct1.get_local_id(2),
                    row_max, item_ct1);
-/* DPCT_ORIG     if (threadIdx.x == 0) {*/
     if (item_ct1.get_local_id(2) == 0) {
-/* DPCT_ORIG         tiles_maxima[blockIdx.x] = row_max[0]*/
         tiles_maxima[item_ct1.get_group(2)] = row_max[0];
     }
 }
@@ -137,24 +115,17 @@ const int ib1 = 33;  ///< ib + 1 for stride to avoid GPU bank conflicts
 /// @param[in] ldv
 ///     Leading dimension of tiles_sums (values) array.
 ///
-/* DPCT_ORIG template <typename scalar_t>
-__global__ void genorm_one_kernel(
-    int64_t m, int64_t n,
-    scalar_t const* const* Aarray, int64_t lda,
-    blas::real_type<scalar_t>* tiles_sums, int64_t ldv)*/
 template <typename scalar_t>
-void genorm_one_kernel(int64_t m, int64_t n, scalar_t const *const *Aarray,
-                       int64_t lda, blas::real_type<scalar_t> *tiles_sums,
-                       int64_t ldv, const sycl::nd_item<3> &item_ct1,
-                       uint8_t *dpct_local)
+void genorm_one_kernel(
+    int64_t m, int64_t n,
+    scalar_t const *const *Aarray, int64_t lda,
+    blas::real_type<scalar_t> *tiles_sums, int64_t ldv,
+    const sycl::nd_item<3> &item_ct1, uint8_t *dpct_local)
 {
     using real_t = blas::real_type<scalar_t>;
-/* DPCT_ORIG     scalar_t const* tile = Aarray[ blockIdx.x ]*/
     scalar_t const *tile = Aarray[item_ct1.get_group(2)];
-/* DPCT_ORIG     extern __shared__ char dynamic_data[]*/
     auto dynamic_data = (char *)dpct_local;
     real_t* shmem_tile = (real_t*)dynamic_data;
-/* DPCT_ORIG     const int k = threadIdx.x*/
     const int k = item_ct1.get_local_id(2);
 
     for (int64_t jj = 0; jj < n; jj += ib) {
@@ -165,29 +136,16 @@ void genorm_one_kernel(int64_t m, int64_t n, scalar_t const *const *Aarray,
             for (int64_t j = 0; j < ib; ++j)
                 if (jj+j < n && ii+k < m)
                     shmem_tile[ j*ib1 + k ] = abs( tile[ (jj+j)*lda + ii+k ] );
-/* DPCT_ORIG             __syncthreads();  */
-            /*
-            DPCT1065:37: Consider replacing sycl::nd_item::barrier() with
-            sycl::nd_item::barrier(sycl::access::fence_space::local_space) for
-            better performance if there is no access to global memory.
-            */
             item_ct1.barrier(); // shmem_tile loaded
 
             // Each thread sums one column.
             for (int64_t i = 0; i < ib; ++i)
                 if (jj+k < n && ii+i < m)
                     sum += shmem_tile[ k*ib1 + i ];
-/* DPCT_ORIG             __syncthreads();  */
-            /*
-            DPCT1065:38: Consider replacing sycl::nd_item::barrier() with
-            sycl::nd_item::barrier(sycl::access::fence_space::local_space) for
-            better performance if there is no access to global memory.
-            */
             item_ct1.barrier(); // done with shmem_tile
         }
 
         if (jj+k < n)
-/* DPCT_ORIG             tiles_sums[ blockIdx.x*ldv + jj+k ] = sum*/
             tiles_sums[item_ct1.get_group(2) * ldv + jj + k] = sum;
     }
 }
@@ -221,21 +179,16 @@ void genorm_one_kernel(int64_t m, int64_t n, scalar_t const *const *Aarray,
 /// @param[in] ldv
 ///     Leading dimension of tiles_sums (values) array.
 ///
-/* DPCT_ORIG template <typename scalar_t>
-__global__ void genorm_inf_kernel(
-    int64_t m, int64_t n,
-    scalar_t const* const* Aarray, int64_t lda,
-    blas::real_type<scalar_t>* tiles_sums, int64_t ldv)*/
 template <typename scalar_t>
-void genorm_inf_kernel(int64_t m, int64_t n, scalar_t const *const *Aarray,
-                       int64_t lda, blas::real_type<scalar_t> *tiles_sums,
-                       int64_t ldv, const sycl::nd_item<3> &item_ct1)
+void genorm_inf_kernel(
+    int64_t m, int64_t n,
+    scalar_t const *const *Aarray, int64_t lda,
+    blas::real_type<scalar_t> *tiles_sums, int64_t ldv,
+    const sycl::nd_item<3> &item_ct1)
 {
     using real_t = blas::real_type<scalar_t>;
-/* DPCT_ORIG     scalar_t const* tile = Aarray[ blockIdx.x ]*/
     scalar_t const *tile = Aarray[item_ct1.get_group(2)];
 
-/* DPCT_ORIG     for (int64_t i = threadIdx.x; i < m; i += blockDim.x) {*/
     for (int64_t i = item_ct1.get_local_id(2); i < m;
          i += item_ct1.get_local_range(2)) {
         scalar_t const* row = &tile[ i ];
@@ -246,7 +199,6 @@ void genorm_inf_kernel(int64_t m, int64_t n, scalar_t const *const *Aarray,
         for (int64_t j = 1; j < n; ++j)
             sum += abs(row[j*lda]);
 
-/* DPCT_ORIG         tiles_sums[ blockIdx.x*ldv + i ] = sum*/
         tiles_sums[item_ct1.get_group(2) * ldv + i] = sum;
     }
 }
@@ -280,26 +232,20 @@ void genorm_inf_kernel(int64_t m, int64_t n, scalar_t const *const *Aarray,
 ///     such that scale^2 * sumsq = sum_{i,j} abs( A^(k)_{i,j} )^2
 ///     for tile A^(k).
 ///
-/* DPCT_ORIG template <typename scalar_t>
-__global__ void genorm_fro_kernel(
-    int64_t m, int64_t n,
-    scalar_t const* const* Aarray, int64_t lda,
-    blas::real_type<scalar_t>* tiles_values)*/
 template <typename scalar_t>
-void genorm_fro_kernel(int64_t m, int64_t n, scalar_t const *const *Aarray,
-                       int64_t lda, blas::real_type<scalar_t> *tiles_values,
-                       const sycl::nd_item<3> &item_ct1, uint8_t *dpct_local)
+void genorm_fro_kernel(
+    int64_t m, int64_t n,
+    scalar_t const *const *Aarray, int64_t lda,
+    blas::real_type<scalar_t> *tiles_values,
+    const sycl::nd_item<3> &item_ct1, uint8_t *dpct_local)
 {
     using real_t = blas::real_type<scalar_t>;
-/* DPCT_ORIG     scalar_t const* tile = Aarray[ blockIdx.x ]*/
     scalar_t const *tile = Aarray[item_ct1.get_group(2)];
     int chunk;
 
     // Save partial results in shared memory.
-/* DPCT_ORIG     extern __shared__ char dynamic_data[]*/
     auto dynamic_data = (char *)dpct_local;
     real_t* row_scale = (real_t*) &dynamic_data[0];
-/* DPCT_ORIG     real_t* row_sumsq = &row_scale[blockDim.x]*/
     real_t *row_sumsq = &row_scale[item_ct1.get_local_range(2)];
 
     real_t tile_scale = row_scale[0];
@@ -307,20 +253,17 @@ void genorm_fro_kernel(int64_t m, int64_t n, scalar_t const *const *Aarray,
 
     // Each thread finds sum-of-squares of one row.
     // This does coalesced reads of one column at a time in parallel.
-/* DPCT_ORIG     for (int i = threadIdx.x; i < m; i += blockDim.x) {*/
     for (int i = item_ct1.get_local_id(2); i < m;
          i += item_ct1.get_local_range(2)) {
         scalar_t const* row = &tile[ i ];
         real_t scale = 0;
         real_t sumsq = 1;
-/* DPCT_ORIG         chunk = i % blockDim.x*/
         chunk = i % item_ct1.get_local_range(2);
 
         for (int64_t j = 0; j < n; ++j) {
             add_sumsq(scale, sumsq, abs(row[j*lda]));
         }
 
-/* DPCT_ORIG         if (i < blockDim.x) {*/
         if (i < item_ct1.get_local_range(2)) {
             row_scale[chunk] = 0;
             row_sumsq[chunk] = 1;
@@ -328,66 +271,39 @@ void genorm_fro_kernel(int64_t m, int64_t n, scalar_t const *const *Aarray,
 
         // Save partial results in shared memory.
         combine_sumsq(row_scale[chunk], row_sumsq[chunk], scale, sumsq);
-/* DPCT_ORIG         __syncthreads()*/
-        /*
-        DPCT1065:39: Consider replacing sycl::nd_item::barrier() with
-        sycl::nd_item::barrier(sycl::access::fence_space::local_space) for
-        better performance if there is no access to global memory.
-        */
-/////////////////////////////////////////////////////        item_ct1.barrier();
     }
 
-/////////////////////////////////////////////////////
     item_ct1.barrier();
-
-
-//////////////////////////////////////////////////
-///////////////    return;
-//////////////////////////////////////////////////
-
-
 
     // Reduction to find sum-of-squares of tile.
     // todo: parallel reduction.
-/* DPCT_ORIG     if (threadIdx.x == 0) {*/
     if (item_ct1.get_local_id(2) == 0) {
         tile_scale = row_scale[0];
         tile_sumsq = row_sumsq[0];
-/* DPCT_ORIG         for (int64_t chunk = 1; chunk < blockDim.x && chunk < m;
- * ++chunk) {*/
         for (int64_t chunk = 1;
              chunk < item_ct1.get_local_range(2) && chunk < m; ++chunk) {
             combine_sumsq(tile_scale, tile_sumsq, row_scale[chunk], row_sumsq[chunk]);
         }
 
-/* DPCT_ORIG         tiles_values[blockIdx.x*2 + 0] = tile_scale*/
         tiles_values[item_ct1.get_group(2) * 2 + 0] = tile_scale;
-/* DPCT_ORIG         tiles_values[blockIdx.x*2 + 1] = tile_sumsq*/
         tiles_values[item_ct1.get_group(2) * 2 + 1] = tile_sumsq;
     }
 }
 
 //------------------------------------------------------------------------------
 // todo docs
-/* DPCT_ORIG template <typename scalar_t>
-__global__ void ge_col_norms_max_kernel(
-    int64_t m, int64_t n,
-    scalar_t const* const* Aarray, int64_t lda,
-    blas::real_type<scalar_t>* col_max, int64_t ldv)*/
 template <typename scalar_t>
-void ge_col_norms_max_kernel(int64_t m, int64_t n,
-                             scalar_t const *const *Aarray, int64_t lda,
-                             blas::real_type<scalar_t> *col_max, int64_t ldv,
-                             const sycl::nd_item<3> &item_ct1,
-                             uint8_t *dpct_local)
+void ge_col_norms_max_kernel(
+    int64_t m, int64_t n,
+    scalar_t const *const *Aarray, int64_t lda,
+    blas::real_type<scalar_t> *col_max, int64_t ldv,
+    const sycl::nd_item<3> &item_ct1,
+    uint8_t *dpct_local)
 {
     using real_t = blas::real_type<scalar_t>;
-/* DPCT_ORIG     scalar_t const* tile = Aarray[ blockIdx.x ]*/
     scalar_t const *tile = Aarray[item_ct1.get_group(2)];
-/* DPCT_ORIG     extern __shared__ char dynamic_data[]*/
     auto dynamic_data = (char *)dpct_local;
     real_t* shmem_tile = (real_t*)dynamic_data;
-/* DPCT_ORIG     const int k = threadIdx.x*/
     const int k = item_ct1.get_local_id(2);
 
     for (int64_t jj = 0; jj < n; jj += ib) {
@@ -398,29 +314,16 @@ void ge_col_norms_max_kernel(int64_t m, int64_t n,
             for (int64_t j = 0; j < ib; ++j)
                 if (jj+j < n && ii+k < m)
                     shmem_tile[ j*ib1 + k ] = abs( tile[ (jj+j)*lda + ii+k ] );
-/* DPCT_ORIG             __syncthreads();  */
-            /*
-            DPCT1065:40: Consider replacing sycl::nd_item::barrier() with
-            sycl::nd_item::barrier(sycl::access::fence_space::local_space) for
-            better performance if there is no access to global memory.
-            */
             item_ct1.barrier(); // shmem_tile loaded
 
             // Each thread compute max of one column.
             for (int64_t i = 0; i < ib; ++i)
                 if (jj+k < n && ii+i < m)
                     max = max_nan( shmem_tile[ k*ib1 + i ], max );
-/* DPCT_ORIG             __syncthreads();  */
-            /*
-            DPCT1065:41: Consider replacing sycl::nd_item::barrier() with
-            sycl::nd_item::barrier(sycl::access::fence_space::local_space) for
-            better performance if there is no access to global memory.
-            */
             item_ct1.barrier(); // done with shmem_tile
         }
 
         if (jj+k < n)
-/* DPCT_ORIG             col_max[ blockIdx.x*ldv + jj+k ] = max*/
             col_max[item_ct1.get_group(2) * ldv + jj + k] = max;
     }
 }
@@ -484,8 +387,8 @@ void genorm(
     lapack::Norm norm, NormScope scope,
     int64_t m, int64_t n,
     scalar_t const* const* Aarray, int64_t lda,
-    blas::real_type<scalar_t>* values, int64_t ldv, int64_t batch_count,
-    blas::Queue &queue)
+    blas::real_type<scalar_t>* values, int64_t ldv,
+    int64_t batch_count, blas::Queue& queue)
 {
     using real_t = blas::real_type<scalar_t>;
     int64_t nb = 512;
@@ -494,11 +397,6 @@ void genorm(
     if (batch_count == 0)
         return;
 
-/* DPCT_ORIG     cudaSetDevice( queue.device() )*/
-    /*
-    DPCT1093:144: The "queue.device()" device may be not the one intended for
-    use. Adjust the selected device if needed.
-    */
     dpct::select_device(queue.device());
 
     if (scope == NormScope::Matrix) {
@@ -511,21 +409,7 @@ void genorm(
             }
             else {
                 assert(ldv == 1);
-                /*
-                DPCT1083:43: The size of local memory in the migrated code may
-                be different from the original code. Check that the allocated
-                memory size in the migrated code is correct.
-                */
                 size_t shared_mem = sizeof(real_t) * nb;
-/* DPCT_ORIG                 genorm_max_kernel
-                    <<<batch_count, nb, shared_mem, queue.stream()>>>
-                    (m, n, Aarray, lda, values)*/
-                /*
-                DPCT1049:42: The work-group size passed to the SYCL kernel may
-                exceed the limit. To get the device limit, query
-                info::device::max_work_group_size. Adjust the work-group size if
-                needed.
-                */
                 ((sycl::queue *)(&queue.stream()))
                     ->submit([&](sycl::handler &cgh) {
                         // accessors to device memory
@@ -553,15 +437,7 @@ void genorm(
             }
             else {
                 assert(ldv >= n);
-                /*
-                DPCT1083:44: The size of local memory in the migrated code may
-                be different from the original code. Check that the allocated
-                memory size in the migrated code is correct.
-                */
                 size_t shared_mem = sizeof(real_t) * ib * ib1;
-/* DPCT_ORIG                 genorm_one_kernel
-                    <<<batch_count, ib, shared_mem, queue.stream()>>>
-                    (m, n, Aarray, lda, values, ldv)*/
                 ((sycl::queue *)(&queue.stream()))
                     ->submit([&](sycl::handler &cgh) {
                         // accessors to device memory
@@ -589,14 +465,6 @@ void genorm(
             }
             else {
                 assert(ldv >= m);
-/* DPCT_ORIG                 genorm_inf_kernel<<<batch_count, nb, 0,
-   queue.stream()>>> (m, n, Aarray, lda, values, ldv)*/
-                /*
-                DPCT1049:45: The work-group size passed to the SYCL kernel may
-                exceed the limit. To get the device limit, query
-                info::device::max_work_group_size. Adjust the work-group size if
-                needed.
-                */
                 ((sycl::queue *)(&queue.stream()))
                     ->parallel_for(
                         sycl::nd_range<3>(sycl::range<3>(1, 1, batch_count) *
@@ -617,21 +485,7 @@ void genorm(
             else {
 
                 assert(ldv == 2);
-                /*
-                DPCT1083:47: The size of local memory in the migrated code may
-                be different from the original code. Check that the allocated
-                memory size in the migrated code is correct.
-                */
                 size_t shared_mem = sizeof(real_t) * nb * 2;
-/* DPCT_ORIG                 genorm_fro_kernel
-                    <<<batch_count, nb, shared_mem, queue.stream()>>>
-                    (m, n, Aarray, lda, values)*/
-                /*
-                DPCT1049:46: The work-group size passed to the SYCL kernel may
-                exceed the limit. To get the device limit, query
-                info::device::max_work_group_size. Adjust the work-group size if
-                needed.
-                */
                 ((sycl::queue *)(&queue.stream()))
                     ->submit([&](sycl::handler &cgh) {
                         // accessors to device memory
@@ -661,15 +515,7 @@ void genorm(
             }
             else {
                 assert(ldv >= n);
-                /*
-                DPCT1083:48: The size of local memory in the migrated code may
-                be different from the original code. Check that the allocated
-                memory size in the migrated code is correct.
-                */
                 size_t shared_mem = sizeof(real_t) * ib * ib1;
-/* DPCT_ORIG                 ge_col_norms_max_kernel
-                    <<<batch_count, ib, shared_mem, queue.stream()>>>
-                    (m, n, Aarray, lda, values, ldv)*/
                 ((sycl::queue *)(&queue.stream()))
                     ->submit([&](sycl::handler &cgh) {
                         // accessors to device memory
@@ -697,13 +543,12 @@ void genorm(
         slate_not_implemented("The norm scope isn't yet supported.");
     }
 
-/* DPCT_ORIG     cudaError_t error = cudaGetLastError()*/
+    /* DPCT_ORIG     cudaError_t error = cudaGetLastError()*/
     /*
     DPCT1010:145: SYCL uses exceptions to report errors and does not use the
     error codes. The call was replaced with 0. You need to rewrite this code.
     */
     dpct::err0 error = 0;
-/* DPCT_ORIG     slate_assert(error == cudaSuccess)*/
     slate_assert(error == 0);
 }
 
@@ -715,7 +560,7 @@ void genorm(
     int64_t m, int64_t n,
     float const* const* Aarray, int64_t lda,
     float* values, int64_t ldv, int64_t batch_count,
-    blas::Queue &queue);
+    blas::Queue& queue);
 
 template
 void genorm(
@@ -723,19 +568,21 @@ void genorm(
     int64_t m, int64_t n,
     double const* const* Aarray, int64_t lda,
     double* values, int64_t ldv, int64_t batch_count,
-    blas::Queue &queue);
+    blas::Queue& queue);
 
 template void
-genorm(lapack::Norm norm, NormScope scope, int64_t m, int64_t n,
-       /* DPCT_ORIG     cuFloatComplex const* const* Aarray, int64_t lda,*/
-       sycl::float2 const *const *Aarray, int64_t lda, float *values,
-       int64_t ldv, int64_t batch_count, blas::Queue &queue);
+genorm(
+    lapack::Norm norm, NormScope scope,
+    int64_t m, int64_t n,
+    sycl::float2 const *const *Aarray, int64_t lda, float *values,
+    int64_t ldv, int64_t batch_count, blas::Queue& queue);
 
 template void
-genorm(lapack::Norm norm, NormScope scope, int64_t m, int64_t n,
-       /* DPCT_ORIG     cuDoubleComplex const* const* Aarray, int64_t lda,*/
-       sycl::double2 const *const *Aarray, int64_t lda, double *values,
-       int64_t ldv, int64_t batch_count, blas::Queue &queue);
+genorm(
+    lapack::Norm norm, NormScope scope,
+    int64_t m, int64_t n,
+    sycl::double2 const *const *Aarray, int64_t lda, double *values,
+    int64_t ldv, int64_t batch_count, blas::Queue& queue);
 
 } // namespace device
 } // namespace slate

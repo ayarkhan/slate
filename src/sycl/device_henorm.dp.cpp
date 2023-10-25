@@ -4,11 +4,9 @@
 // the terms of the BSD 3-Clause license. See the accompanying LICENSE file.
 
 #include <sycl/sycl.hpp>
-#include <dpct/dpct.hpp>
 #include "slate/Exception.hh"
 #include "slate/internal/device.hh"
 
-/* DPCT_ORIG #include "device_util.cuh"*/
 #include "device_util.dp.hpp"
 
 #include <cstdio>
@@ -40,43 +38,32 @@ namespace device {
 ///     On exit, tiles_maxima[k] = max_{i, j} abs( A^(k)_(i, j) )
 ///     for tile A^(k).
 ///
-/* DPCT_ORIG template <typename scalar_t>
-__global__ void henorm_max_kernel(
-    lapack::Uplo uplo,
-    int64_t n,
-    scalar_t const* const* Aarray, int64_t lda,
-    blas::real_type<scalar_t>* tiles_maxima)*/
 template <typename scalar_t>
-void henorm_max_kernel(lapack::Uplo uplo, int64_t n,
-                       scalar_t const *const *Aarray, int64_t lda,
-                       blas::real_type<scalar_t> *tiles_maxima,
-                       const sycl::nd_item<3> &item_ct1, uint8_t *dpct_local)
+void henorm_max_kernel(
+  lapack::Uplo uplo,
+  int64_t n,
+  scalar_t const *const *Aarray, int64_t lda,
+  blas::real_type<scalar_t> *tiles_maxima,
+  const sycl::nd_item<3> &item_ct1, uint8_t *dpct_local)
 {
     using real_t = blas::real_type<scalar_t>;
-/* DPCT_ORIG     scalar_t const* tile = Aarray[ blockIdx.x ]*/
     scalar_t const *tile = Aarray[item_ct1.get_group(2)];
     int chunk;
 
     // Save partial results in shared memory.
-/* DPCT_ORIG     extern __shared__ char dynamic_data[]*/
     auto dynamic_data = (char *)dpct_local;
     real_t* row_max = (real_t*) dynamic_data;
-/* DPCT_ORIG     if (threadIdx.x < blockDim.x) {*/
     if (item_ct1.get_local_id(2) < item_ct1.get_local_range(2)) {
-/* DPCT_ORIG         row_max[threadIdx.x] = 0*/
         row_max[item_ct1.get_local_id(2)] = 0;
     }
 
     // Each thread finds max of one row.
     // This does coalesced reads of one column at a time in parallel.
-/* DPCT_ORIG     for (int i = threadIdx.x; i < n; i += blockDim.x) {*/
     for (int i = item_ct1.get_local_id(2); i < n;
          i += item_ct1.get_local_range(2)) {
-/* DPCT_ORIG         chunk = i % blockDim.x*/
         chunk = i % item_ct1.get_local_range(2);
 
         scalar_t const* row = &tile[ i ];
-/* DPCT_ORIG         if (i < blockDim.x) {*/
         if (i < item_ct1.get_local_range(2)) {
             row_max[chunk] = 0;
         }
@@ -99,19 +86,10 @@ void henorm_max_kernel(lapack::Uplo uplo, int64_t n,
     }
 
     // Reduction to find max of tile.
-/* DPCT_ORIG     __syncthreads()*/
-    /*
-    DPCT1065:29: Consider replacing sycl::nd_item::barrier() with
-    sycl::nd_item::barrier(sycl::access::fence_space::local_space) for better
-    performance if there is no access to global memory.
-    */
     item_ct1.barrier();
-/* DPCT_ORIG     max_nan_reduce(blockDim.x, threadIdx.x, row_max)*/
     max_nan_reduce(item_ct1.get_local_range(2), item_ct1.get_local_id(2),
                    row_max, item_ct1);
-/* DPCT_ORIG     if (threadIdx.x == 0) {*/
     if (item_ct1.get_local_id(2) == 0) {
-/* DPCT_ORIG         tiles_maxima[blockIdx.x] = row_max[0]*/
         tiles_maxima[item_ct1.get_group(2)] = row_max[0];
     }
 }
@@ -142,25 +120,19 @@ void henorm_max_kernel(lapack::Uplo uplo, int64_t n,
 /// @param[in] ldv
 ///     Leading dimension of tiles_sums (values) array.
 ///
-/* DPCT_ORIG template <typename scalar_t>
-__global__ void henorm_one_kernel(
+template <typename scalar_t>
+void henorm_one_kernel(
     lapack::Uplo uplo,
     int64_t n,
-    scalar_t const* const* Aarray, int64_t lda,
-    blas::real_type<scalar_t>* tiles_sums, int64_t ldv)*/
-template <typename scalar_t>
-void henorm_one_kernel(lapack::Uplo uplo, int64_t n,
-                       scalar_t const *const *Aarray, int64_t lda,
-                       blas::real_type<scalar_t> *tiles_sums, int64_t ldv,
-                       const sycl::nd_item<3> &item_ct1)
+    scalar_t const *const *Aarray, int64_t lda,
+    blas::real_type<scalar_t> *tiles_sums, int64_t ldv,
+    const sycl::nd_item<3> &item_ct1)
 {
     using real_t = blas::real_type<scalar_t>;
-/* DPCT_ORIG     scalar_t const* tile = Aarray[ blockIdx.x ]*/
     scalar_t const *tile = Aarray[item_ct1.get_group(2)];
 
     // Each thread sums one row/column.
     // todo: the row reads are coalesced, but the col reads are not coalesced
-/* DPCT_ORIG     for (int k = threadIdx.x; k < n; k += blockDim.x) {*/
     for (int k = item_ct1.get_local_id(2); k < n;
          k += item_ct1.get_local_range(2)) {
         scalar_t const* row    = &tile[ k ];
@@ -184,7 +156,6 @@ void henorm_one_kernel(lapack::Uplo uplo, int64_t n,
             for (int64_t i = 0; i < k && i < n; ++i) // strictly upper
                 sum += abs(column[i]);
         }
-/* DPCT_ORIG         tiles_sums[ blockIdx.x*ldv + k ] = sum*/
         tiles_sums[item_ct1.get_group(2) * ldv + k] = sum;
     }
 }
@@ -215,38 +186,29 @@ void henorm_one_kernel(lapack::Uplo uplo, int64_t n,
 ///     such that scale^2 * sumsq = sum_{i,j} abs( A^(k)_{i,j} )^2
 ///     for tile A^(k).
 ///
-/* DPCT_ORIG template <typename scalar_t>
-__global__ void henorm_fro_kernel(
+template <typename scalar_t>
+void henorm_fro_kernel(
     lapack::Uplo uplo,
     int64_t n,
-    scalar_t const* const* Aarray, int64_t lda,
-    blas::real_type<scalar_t>* tiles_values)*/
-template <typename scalar_t>
-void henorm_fro_kernel(lapack::Uplo uplo, int64_t n,
-                       scalar_t const *const *Aarray, int64_t lda,
-                       blas::real_type<scalar_t> *tiles_values,
-                       const sycl::nd_item<3> &item_ct1, uint8_t *dpct_local)
+    scalar_t const *const *Aarray, int64_t lda,
+    blas::real_type<scalar_t> *tiles_values,
+    const sycl::nd_item<3> &item_ct1, uint8_t *dpct_local)
 {
     using real_t = blas::real_type<scalar_t>;
-/* DPCT_ORIG     scalar_t const* tile = Aarray[ blockIdx.x ]*/
     scalar_t const *tile = Aarray[item_ct1.get_group(2)];
     int chunk;
 
     // Save partial results in shared memory.
-/* DPCT_ORIG     extern __shared__ char dynamic_data[]*/
     auto dynamic_data = (char *)dpct_local;
     real_t* row_scale = (real_t*) &dynamic_data[0];
-/* DPCT_ORIG     real_t* row_sumsq = &row_scale[blockDim.x]*/
     real_t *row_sumsq = &row_scale[item_ct1.get_local_range(2)];
 
     // Each thread finds sum-of-squares of one row.
     // This does coalesced reads of one column at a time in parallel.
-/* DPCT_ORIG     for (int i = threadIdx.x; i < n; i += blockDim.x) {*/
     for (int i = item_ct1.get_local_id(2); i < n;
          i += item_ct1.get_local_range(2)) {
         real_t scale = 0;
         real_t sumsq = 1;
-/* DPCT_ORIG         chunk = i % blockDim.x*/
         chunk = i % item_ct1.get_local_range(2);
         scalar_t const* row = &tile[ i ];
 
@@ -268,42 +230,26 @@ void henorm_fro_kernel(lapack::Uplo uplo, int64_t n,
             add_sumsq( scale, sumsq, abs( real( row[ i*lda ] ) ) );
         }
 
-/* DPCT_ORIG         if (i < blockDim.x) {*/
         if (i < item_ct1.get_local_range(2)) {
             row_scale[chunk] = 0;
             row_sumsq[chunk] = 1;
         }
         combine_sumsq(row_scale[chunk], row_sumsq[chunk], scale, sumsq);
-/* DPCT_ORIG         __syncthreads()*/
-        /*
-        DPCT1065:30: Consider replacing sycl::nd_item::barrier() with
-        sycl::nd_item::barrier(sycl::access::fence_space::local_space) for
-        better performance if there is no access to global memory.
-        */
-        ///////////////////////////////// item_ct1.barrier();
     }
 
-/////////////////////////////////
     item_ct1.barrier();
-/////////////////////////////////
-
 
     // Reduction to find sum-of-squares of tile.
     // todo: parallel reduction.
-/* DPCT_ORIG     if (threadIdx.x == 0) {*/
     if (item_ct1.get_local_id(2) == 0) {
         real_t tile_scale = row_scale[0];
         real_t tile_sumsq = row_sumsq[0];
-/* DPCT_ORIG         for (int64_t chunk = 1; chunk < blockDim.x && chunk < n;
- * ++chunk) {*/
         for (int64_t chunk = 1;
              chunk < item_ct1.get_local_range(2) && chunk < n; ++chunk) {
             combine_sumsq(tile_scale, tile_sumsq, row_scale[chunk], row_sumsq[chunk]);
         }
 
-/* DPCT_ORIG         tiles_values[blockIdx.x*2 + 0] = tile_scale*/
         tiles_values[item_ct1.get_group(2) * 2 + 0] = tile_scale;
-/* DPCT_ORIG         tiles_values[blockIdx.x*2 + 1] = tile_sumsq*/
         tiles_values[item_ct1.get_group(2) * 2 + 1] = tile_sumsq;
     }
 }
@@ -370,11 +316,6 @@ void henorm(
     if (batch_count == 0)
         return;
 
-/* DPCT_ORIG     cudaSetDevice( queue.device() )*/
-    /*
-    DPCT1093:142: The "queue.device()" device may be not the one intended for
-    use. Adjust the selected device if needed.
-    */
     dpct::select_device(queue.device());
 
     //---------
@@ -385,20 +326,7 @@ void henorm(
         }
         else {
             assert(ldv == 1);
-            /*
-            DPCT1083:32: The size of local memory in the migrated code may be
-            different from the original code. Check that the allocated memory
-            size in the migrated code is correct.
-            */
             size_t shared_mem = sizeof(real_t) * nb;
-/* DPCT_ORIG             henorm_max_kernel<<<batch_count, nb, shared_mem,
-   queue.stream()>>> (uplo, n, Aarray, lda, values)*/
-            /*
-            DPCT1049:31: The work-group size passed to the SYCL kernel may
-            exceed the limit. To get the device limit, query
-            info::device::max_work_group_size. Adjust the work-group size if
-            needed.
-            */
             ((sycl::queue *)(&queue.stream()))->submit([&](sycl::handler &cgh) {
                 // accessors to device memory
                 sycl::local_accessor<uint8_t, 1> dpct_local_acc_ct1(
@@ -424,14 +352,6 @@ void henorm(
         }
         else {
             assert(ldv >= n);
-/* DPCT_ORIG             henorm_one_kernel<<<batch_count, nb, 0,
-   queue.stream()>>> (uplo, n, Aarray, lda, values, ldv)*/
-            /*
-            DPCT1049:33: The work-group size passed to the SYCL kernel may
-            exceed the limit. To get the device limit, query
-            info::device::max_work_group_size. Adjust the work-group size if
-            needed.
-            */
             ((sycl::queue *)(&queue.stream()))
                 ->parallel_for(
                     sycl::nd_range<3>(sycl::range<3>(1, 1, batch_count) *
@@ -451,20 +371,7 @@ void henorm(
         }
         else {
             assert(ldv == 2);
-            /*
-            DPCT1083:35: The size of local memory in the migrated code may be
-            different from the original code. Check that the allocated memory
-            size in the migrated code is correct.
-            */
             size_t shared_mem = sizeof(real_t) * nb * 2;
-/* DPCT_ORIG             henorm_fro_kernel<<<batch_count, nb, shared_mem,
-   queue.stream()>>> (uplo, n, Aarray, lda, values)*/
-            /*
-            DPCT1049:34: The work-group size passed to the SYCL kernel may
-            exceed the limit. To get the device limit, query
-            info::device::max_work_group_size. Adjust the work-group size if
-            needed.
-            */
             ((sycl::queue *)(&queue.stream()))->submit([&](sycl::handler &cgh) {
                 // accessors to device memory
                 sycl::local_accessor<uint8_t, 1> dpct_local_acc_ct1(
@@ -483,13 +390,12 @@ void henorm(
         }
     }
 
-/* DPCT_ORIG     cudaError_t error = cudaGetLastError()*/
+    /* DPCT_ORIG     cudaError_t error = cudaGetLastError()*/
     /*
     DPCT1010:143: SYCL uses exceptions to report errors and does not use the
     error codes. The call was replaced with 0. You need to rewrite this code.
     */
     dpct::err0 error = 0;
-/* DPCT_ORIG     slate_assert(error == cudaSuccess)*/
     slate_assert(error == 0);
 }
 
@@ -500,28 +406,32 @@ void henorm(
     lapack::Norm norm, lapack::Uplo uplo,
     int64_t n,
     float const* const* Aarray, int64_t lda,
-    float* values, int64_t ldv, int64_t batch_count,
-    blas::Queue& queue);
+    float* values, int64_t ldv,
+    int64_t batch_count, blas::Queue& queue);
 
 template
 void henorm(
     lapack::Norm norm, lapack::Uplo uplo,
     int64_t n,
     double const* const* Aarray, int64_t lda,
-    double* values, int64_t ldv, int64_t batch_count,
+    double* values, int64_t ldv,
+    int64_t batch_count, blas::Queue& queue);
+
+template void
+henorm(
+    lapack::Norm norm, lapack::Uplo uplo,
+    int64_t n,
+    sycl::float2 const *const *Aarray, int64_t lda, float *values,
+    int64_t ldv, int64_t batch_count,
     blas::Queue& queue);
 
 template void
-henorm(lapack::Norm norm, lapack::Uplo uplo, int64_t n,
-       /* DPCT_ORIG     cuFloatComplex const* const* Aarray, int64_t lda,*/
-       sycl::float2 const *const *Aarray, int64_t lda, float *values,
-       int64_t ldv, int64_t batch_count, blas::Queue &queue);
-
-template void
-henorm(lapack::Norm norm, lapack::Uplo uplo, int64_t n,
-       /* DPCT_ORIG     cuDoubleComplex const* const* Aarray, int64_t lda,*/
-       sycl::double2 const *const *Aarray, int64_t lda, double *values,
-       int64_t ldv, int64_t batch_count, blas::Queue &queue);
+henorm(
+    lapack::Norm norm, lapack::Uplo uplo,
+    int64_t n,
+    sycl::double2 const *const *Aarray, int64_t lda,
+    double *values, int64_t ldv,
+    int64_t batch_count, blas::Queue& queue);
 
 } // namespace device
 } // namespace slate

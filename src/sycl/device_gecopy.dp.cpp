@@ -4,11 +4,9 @@
 // the terms of the BSD 3-Clause license. See the accompanying LICENSE file.
 
 #include <sycl/sycl.hpp>
-#include <dpct/dpct.hpp>
 #include "slate/Exception.hh"
 #include "slate/internal/device.hh"
 
-/* DPCT_ORIG #include "device_util.cuh"*/
 #include "device_util.dp.hpp"
 
 namespace slate {
@@ -40,23 +38,17 @@ namespace device {
 /// @param[in] ldb
 ///     Leading dimension of each tile in Barray. ldb >= m.
 ///
-/* DPCT_ORIG template <typename src_scalar_t, typename dst_scalar_t>
-__global__ void gecopy_kernel(
-    int64_t m, int64_t n,
-    src_scalar_t const* const* Aarray, int64_t lda,
-    dst_scalar_t** Barray, int64_t ldb)*/
 template <typename src_scalar_t, typename dst_scalar_t>
-void gecopy_kernel(int64_t m, int64_t n, src_scalar_t const *const *Aarray,
-                   int64_t lda, dst_scalar_t **Barray, int64_t ldb,
-                   const sycl::nd_item<3> &item_ct1)
+void gecopy_kernel(
+    int64_t m, int64_t n,
+    src_scalar_t const *const *Aarray, int64_t lda,
+    dst_scalar_t **Barray, int64_t ldb,
+    const sycl::nd_item<3> &item_ct1)
 {
-/* DPCT_ORIG     src_scalar_t const* tileA = Aarray[ blockIdx.x ]*/
     src_scalar_t const *tileA = Aarray[item_ct1.get_group(2)];
-/* DPCT_ORIG     dst_scalar_t*       tileB = Barray[ blockIdx.x ]*/
     dst_scalar_t *tileB = Barray[item_ct1.get_group(2)];
 
     // thread per row, if more rows than threads, loop by blockDim.x
-/* DPCT_ORIG     for (int64_t i = threadIdx.x; i < m; i += blockDim.x) {*/
     for (int64_t i = item_ct1.get_local_id(2); i < m;
          i += item_ct1.get_local_range(2)) {
         src_scalar_t const* rowA = &tileA[ i ];
@@ -105,7 +97,7 @@ void gecopy(
     int64_t m, int64_t n,
     src_scalar_t const* const* Aarray, int64_t lda,
     dst_scalar_t** Barray, int64_t ldb,
-    int64_t batch_count, blas::Queue &queue)
+    int64_t batch_count, blas::Queue& queue)
 {
     // quick return
     if (batch_count == 0)
@@ -114,22 +106,8 @@ void gecopy(
     // Max threads/block=1024 for current CUDA compute capability (<= 7.5)
     int64_t nthreads = std::min( int64_t( 1024 ), m );
 
-/* DPCT_ORIG     cudaSetDevice( queue.device() )*/
-    /*
-    DPCT1093:152: The "queue.device()" device may be not the one intended for
-    use. Adjust the selected device if needed.
-    */
     dpct::select_device(queue.device());
 
-/* DPCT_ORIG     gecopy_kernel<<<batch_count, nthreads, 0, queue.stream()>>>(
-          m, n,
-          Aarray, lda,
-          Barray, ldb)*/
-    /*
-    DPCT1049:59: The work-group size passed to the SYCL kernel may exceed the
-    limit. To get the device limit, query info::device::max_work_group_size.
-    Adjust the work-group size if needed.
-    */
     ((sycl::queue *)(&queue.stream()))
         ->parallel_for(sycl::nd_range<3>(sycl::range<3>(1, 1, batch_count) *
                                              sycl::range<3>(1, 1, nthreads),
@@ -139,13 +117,12 @@ void gecopy(
                                          item_ct1);
                        });
 
-/* DPCT_ORIG     cudaError_t error = cudaGetLastError()*/
+    /* DPCT_ORIG     cudaError_t error = cudaGetLastError()*/
     /*
     DPCT1010:153: SYCL uses exceptions to report errors and does not use the
     error codes. The call was replaced with 0. You need to rewrite this code.
     */
     dpct::err0 error = 0;
-/* DPCT_ORIG     slate_assert(error == cudaSuccess)*/
     slate_assert(error == 0);
 }
 
@@ -158,7 +135,7 @@ void gecopy(
     int64_t m, int64_t n,
     float const* const* Aarray, int64_t lda,
     float** Barray, int64_t ldb,
-    int64_t batch_count, blas::Queue &queue);
+    int64_t batch_count, blas::Queue& queue);
 
 // float => double
 template
@@ -166,7 +143,7 @@ void gecopy(
     int64_t m, int64_t n,
     float const* const* Aarray, int64_t lda,
     double** Barray, int64_t ldb,
-    int64_t batch_count, blas::Queue &queue);
+    int64_t batch_count, blas::Queue& queue);
 
 // double => double
 template
@@ -174,7 +151,7 @@ void gecopy(
     int64_t m, int64_t n,
     double const* const* Aarray, int64_t lda,
     double** Barray, int64_t ldb,
-    int64_t batch_count, blas::Queue &queue);
+    int64_t batch_count, blas::Queue& queue);
 
 // double => float
 template
@@ -182,57 +159,53 @@ void gecopy(
     int64_t m, int64_t n,
     double const* const* Aarray, int64_t lda,
     float** Barray, int64_t ldb,
-    int64_t batch_count, blas::Queue &queue);
+    int64_t batch_count, blas::Queue& queue);
 
 // complex-float => complex-float
 template void
-gecopy(int64_t m, int64_t n,
-       /* DPCT_ORIG     cuFloatComplex const* const* Aarray, int64_t lda,*/
-       sycl::float2 const *const *Aarray, int64_t lda,
-       /* DPCT_ORIG     cuFloatComplex** Barray, int64_t ldb,*/
-       sycl::float2 **Barray, int64_t ldb, int64_t batch_count,
-       blas::Queue &queue);
+gecopy(
+    int64_t m, int64_t n,
+    sycl::float2 const *const *Aarray, int64_t lda,
+    sycl::float2 **Barray, int64_t ldb, int64_t batch_count,
+    blas::Queue& queue);
 
 // complex-float => complex-double
 template void
-gecopy(int64_t m, int64_t n,
-       /* DPCT_ORIG     cuFloatComplex const* const* Aarray, int64_t lda,*/
-       sycl::float2 const *const *Aarray, int64_t lda,
-       /* DPCT_ORIG     cuDoubleComplex** Barray, int64_t ldb,*/
-       sycl::double2 **Barray, int64_t ldb, int64_t batch_count,
-       blas::Queue &queue);
+gecopy(
+    int64_t m, int64_t n,
+    sycl::float2 const *const *Aarray, int64_t lda,
+    sycl::double2 **Barray, int64_t ldb, int64_t batch_count,
+    blas::Queue& queue);
 
 // complex-double => complex-double
 template void
-gecopy(int64_t m, int64_t n,
-       /* DPCT_ORIG     cuDoubleComplex const* const* Aarray, int64_t lda,*/
-       sycl::double2 const *const *Aarray, int64_t lda,
-       /* DPCT_ORIG     cuDoubleComplex** Barray, int64_t ldb,*/
-       sycl::double2 **Barray, int64_t ldb, int64_t batch_count,
-       blas::Queue &queue);
+gecopy(
+    int64_t m, int64_t n,
+    sycl::double2 const *const *Aarray, int64_t lda,
+    sycl::double2 **Barray, int64_t ldb, int64_t batch_count,
+    blas::Queue& queue);
 
 // complex-double => complex-float
 template void
-gecopy(int64_t m, int64_t n,
-       /* DPCT_ORIG     cuDoubleComplex const* const* Aarray, int64_t lda,*/
-       sycl::double2 const *const *Aarray, int64_t lda,
-       /* DPCT_ORIG     cuFloatComplex** Barray, int64_t ldb,*/
-       sycl::float2 **Barray, int64_t ldb, int64_t batch_count,
-       blas::Queue &queue);
+gecopy(
+    int64_t m, int64_t n,
+    sycl::double2 const *const *Aarray, int64_t lda,
+    sycl::float2 **Barray, int64_t ldb, int64_t batch_count,
+    blas::Queue& queue);
 
 // float => complex-float
-template void gecopy(int64_t m, int64_t n, float const *const *Aarray,
-                     int64_t lda,
-                     /* DPCT_ORIG     cuFloatComplex** Barray, int64_t ldb,*/
-                     sycl::float2 **Barray, int64_t ldb, int64_t batch_count,
-                     blas::Queue &queue);
+template void gecopy(
+    int64_t m, int64_t n,
+    float const *const *Aarray, int64_t lda,
+    sycl::float2 **Barray, int64_t ldb, int64_t batch_count,
+    blas::Queue& queue);
 
 // double => complex-double
-template void gecopy(int64_t m, int64_t n, double const *const *Aarray,
-                     int64_t lda,
-                     /* DPCT_ORIG     cuDoubleComplex** Barray, int64_t ldb,*/
-                     sycl::double2 **Barray, int64_t ldb, int64_t batch_count,
-                     blas::Queue &queue);
+template void gecopy(
+    int64_t m, int64_t n,
+    double const *const *Aarray, int64_t lda,
+    sycl::double2 **Barray, int64_t ldb, int64_t batch_count,
+    blas::Queue& queue);
 
 } // namespace device
 } // namespace slate

@@ -4,11 +4,9 @@
 // the terms of the BSD 3-Clause license. See the accompanying LICENSE file.
 
 #include <sycl/sycl.hpp>
-#include <dpct/dpct.hpp>
 #include "slate/Exception.hh"
 #include "slate/internal/device.hh"
 
-/* DPCT_ORIG #include "device_util.cuh"*/
 #include "device_util.dp.hpp"
 
 #include <cstdio>
@@ -41,37 +39,23 @@ namespace device {
 /// @param[in] lda
 ///     Leading dimension of each tile in Aarray. lda >= m.
 ///
-/* DPCT_ORIG template <typename scalar_t, typename scalar_t2>
-__global__ void gescale_row_col_batch_kernel(
-    int64_t m, int64_t n,
-    scalar_t2 const* const* Rarray,
-    scalar_t2 const* const* Carray,
-    scalar_t** Aarray, int64_t lda)*/
 template <typename scalar_t, typename scalar_t2>
-void gescale_row_col_batch_kernel(int64_t m, int64_t n,
-                                  scalar_t2 const *const *Rarray,
-                                  scalar_t2 const *const *Carray,
-                                  scalar_t **Aarray, int64_t lda,
-                                  const sycl::nd_item<3> &item_ct1)
+void gescale_row_col_batch_kernel(
+    int64_t m, int64_t n,
+    scalar_t2 const *const *Rarray, scalar_t2 const *const *Carray,
+    scalar_t **Aarray, int64_t lda,
+    const sycl::nd_item<3> &item_ct1)
 {
-/* DPCT_ORIG     scalar_t2 const* R = Rarray[ blockIdx.x ]*/
     scalar_t2 const *R = Rarray[item_ct1.get_group(2)];
-/* DPCT_ORIG     scalar_t2 const* C = Carray[ blockIdx.x ]*/
     scalar_t2 const *C = Carray[item_ct1.get_group(2)];
-/* DPCT_ORIG     scalar_t* tileA    = Aarray[ blockIdx.x ]*/
     scalar_t *tileA = Aarray[item_ct1.get_group(2)];
 
     // thread per row, if more rows than threads, loop by blockDim.x
-/* DPCT_ORIG     for (int64_t i = threadIdx.x; i < m; i += blockDim.x) {*/
     for (int64_t i = item_ct1.get_local_id(2); i < m;
          i += item_ct1.get_local_range(2)) {
         scalar_t* rowA = &tileA[ i ];
         scalar_t2 ri = R[ i ];
         for (int64_t j = 0; j < n; ++j)
-/* DPCT_ORIG             rowA[ j*lda ] = rowA[ j*lda ] * (ri * C[ j ])*/
-            // rowA[j * lda] = dpct_operator_overloading::operator*(
-            //     rowA[j * lda],
-            //     (dpct_operator_overloading::operator*(ri, C[j])));
             rowA[ j*lda ] = rowA[ j*lda ] * (ri * C[ j ]);
     }
 }
@@ -98,29 +82,21 @@ void gescale_row_col_batch_kernel(int64_t m, int64_t n,
 /// @param[in] lda
 ///     Leading dimension of each tile in Aarray. lda >= m.
 ///
-/* DPCT_ORIG template <typename scalar_t, typename scalar_t2>
-__global__ void gescale_col_batch_kernel(
-    int64_t m, int64_t n,
-    scalar_t2 const* const* Carray,
-    scalar_t** Aarray, int64_t lda)*/
 template <typename scalar_t, typename scalar_t2>
-void gescale_col_batch_kernel(int64_t m, int64_t n,
-                              scalar_t2 const *const *Carray, scalar_t **Aarray,
-                              int64_t lda, const sycl::nd_item<3> &item_ct1)
+void gescale_col_batch_kernel(
+    int64_t m, int64_t n,
+    scalar_t2 const *const *Carray,
+    scalar_t **Aarray, int64_t lda,
+    const sycl::nd_item<3> &item_ct1)
 {
-/* DPCT_ORIG     scalar_t2 const* C = Carray[ blockIdx.x ]*/
     scalar_t2 const *C = Carray[item_ct1.get_group(2)];
-/* DPCT_ORIG     scalar_t* tileA    = Aarray[ blockIdx.x ]*/
     scalar_t *tileA = Aarray[item_ct1.get_group(2)];
 
     // thread per row, if more rows than threads, loop by blockDim.x
-/* DPCT_ORIG     for (int64_t i = threadIdx.x; i < m; i += blockDim.x) {*/
     for (int64_t i = item_ct1.get_local_id(2); i < m;
          i += item_ct1.get_local_range(2)) {
         scalar_t* rowA = &tileA[ i ];
         for (int64_t j = 0; j < n; ++j)
-/* DPCT_ORIG             rowA[ j*lda ] = rowA[ j*lda ] * C[ j ]*/
-            // rowA[j * lda] = dpct_operator_overloading::operator*(rowA[j * lda], C[j]);
         rowA[ j*lda ] = rowA[ j*lda ] * C[ j ];
     }
 }
@@ -147,30 +123,22 @@ void gescale_col_batch_kernel(int64_t m, int64_t n,
 /// @param[in] lda
 ///     Leading dimension of each tile in Aarray. lda >= m.
 ///
-/* DPCT_ORIG template <typename scalar_t, typename scalar_t2>
-__global__ void gescale_row_batch_kernel(
-    int64_t m, int64_t n,
-    scalar_t2 const* const* Rarray,
-    scalar_t** Aarray, int64_t lda)*/
 template <typename scalar_t, typename scalar_t2>
-void gescale_row_batch_kernel(int64_t m, int64_t n,
-                              scalar_t2 const *const *Rarray, scalar_t **Aarray,
-                              int64_t lda, const sycl::nd_item<3> &item_ct1)
+void gescale_row_batch_kernel(
+    int64_t m, int64_t n,
+    scalar_t2 const *const *Rarray,
+    scalar_t **Aarray, int64_t lda,
+    const sycl::nd_item<3> &item_ct1)
 {
-/* DPCT_ORIG     scalar_t2 const* R = Rarray[ blockIdx.x ]*/
     scalar_t2 const *R = Rarray[item_ct1.get_group(2)];
-/* DPCT_ORIG     scalar_t* tileA    = Aarray[ blockIdx.x ]*/
     scalar_t *tileA = Aarray[item_ct1.get_group(2)];
 
     // thread per row, if more rows than threads, loop by blockDim.x
-/* DPCT_ORIG     for (int64_t i = threadIdx.x; i < m; i += blockDim.x) {*/
     for (int64_t i = item_ct1.get_local_id(2); i < m;
          i += item_ct1.get_local_range(2)) {
         scalar_t* rowA = &tileA[ i ];
         scalar_t2 ri = R[ i ];
         for (int64_t j = 0; j < n; ++j)
-/* DPCT_ORIG             rowA[ j*lda ] = rowA[ j*lda ] * ri*/
-            // rowA[j * lda] = dpct_operator_overloading::operator*(rowA[j * lda], ri);
             rowA[ j*lda ] = rowA[ j*lda ] * ri;
     }
 }
@@ -222,24 +190,12 @@ void gescale_row_col_batch(
     if (batch_count == 0)
         return;
 
-/* DPCT_ORIG     cudaSetDevice( queue.device() )*/
-    /*
-    DPCT1093:140: The "queue.device()" device may be not the one intended for
-    use. Adjust the selected device if needed.
-    */
     dpct::select_device(queue.device());
 
-    // Max threads/block=1024 for current CUDA compute capability (<= 7.5)
+    // Max threads/block=1024
     int64_t nthreads = std::min( int64_t( 1024 ), m );
 
     if (equed == Equed::Row) {
-/* DPCT_ORIG         gescale_row_batch_kernel<<<batch_count, nthreads, 0,
-   queue.stream()>>>( m, n, Rarray, Aarray, lda )*/
-        /*
-        DPCT1049:26: The work-group size passed to the SYCL kernel may exceed
-        the limit. To get the device limit, query
-        info::device::max_work_group_size. Adjust the work-group size if needed.
-        */
         ((sycl::queue *)(&queue.stream()))
             ->parallel_for(sycl::nd_range<3>(sycl::range<3>(1, 1, batch_count) *
                                                  sycl::range<3>(1, 1, nthreads),
@@ -250,13 +206,6 @@ void gescale_row_col_batch(
                            });
     }
     else if (equed == Equed::Col) {
-/* DPCT_ORIG         gescale_col_batch_kernel<<<batch_count, nthreads, 0,
-   queue.stream()>>>( m, n, Carray, Aarray, lda )*/
-        /*
-        DPCT1049:27: The work-group size passed to the SYCL kernel may exceed
-        the limit. To get the device limit, query
-        info::device::max_work_group_size. Adjust the work-group size if needed.
-        */
         ((sycl::queue *)(&queue.stream()))
             ->parallel_for(sycl::nd_range<3>(sycl::range<3>(1, 1, batch_count) *
                                                  sycl::range<3>(1, 1, nthreads),
@@ -267,13 +216,6 @@ void gescale_row_col_batch(
                            });
     }
     else if (equed == Equed::Both) {
-/* DPCT_ORIG         gescale_row_col_batch_kernel<<<batch_count, nthreads, 0,
-   queue.stream()>>>( m, n, Rarray, Carray, Aarray, lda )*/
-        /*
-        DPCT1049:28: The work-group size passed to the SYCL kernel may exceed
-        the limit. To get the device limit, query
-        info::device::max_work_group_size. Adjust the work-group size if needed.
-        */
         ((sycl::queue *)(&queue.stream()))
             ->parallel_for(sycl::nd_range<3>(sycl::range<3>(1, 1, batch_count) *
                                                  sycl::range<3>(1, 1, nthreads),
@@ -284,13 +226,12 @@ void gescale_row_col_batch(
                            });
     }
 
-/* DPCT_ORIG     cudaError_t error = cudaGetLastError()*/
+    /* DPCT_ORIG     cudaError_t error = cudaGetLastError()*/
     /*
     DPCT1010:141: SYCL uses exceptions to report errors and does not use the
     error codes. The call was replaced with 0. You need to rewrite this code.
     */
     dpct::err0 error = 0;
-/* DPCT_ORIG     slate_assert( error == cudaSuccess )*/
     slate_assert(error == 0);
 }
 
@@ -314,39 +255,37 @@ void gescale_row_col_batch(
 
 // real R, C
 template void
-gescale_row_col_batch(Equed equed, int64_t m, int64_t n,
-                      float const *const *Rarray, float const *const *Carray,
-                      /* DPCT_ORIG     cuFloatComplex** Aarray, int64_t lda,*/
-                      sycl::float2 **Aarray, int64_t lda, int64_t batch_count,
-                      blas::Queue &queue);
+gescale_row_col_batch(
+    Equed equed, int64_t m, int64_t n,
+    float const *const *Rarray,
+    float const *const *Carray,
+    sycl::float2 **Aarray, int64_t lda,
+    int64_t batch_count, blas::Queue& queue);
 
 template void
-gescale_row_col_batch(Equed equed, int64_t m, int64_t n,
-                      double const *const *Rarray, double const *const *Carray,
-                      /* DPCT_ORIG     cuDoubleComplex** Aarray, int64_t lda,*/
-                      sycl::double2 **Aarray, int64_t lda, int64_t batch_count,
-                      blas::Queue &queue);
+gescale_row_col_batch(
+    Equed equed, int64_t m, int64_t n,
+    double const *const *Rarray,
+    double const *const *Carray,
+    sycl::double2 **Aarray, int64_t lda,
+    int64_t batch_count, blas::Queue& queue);
 
 // complex R, C
 template void
-gescale_row_col_batch(Equed equed, int64_t m, int64_t n,
-                      /* DPCT_ORIG     cuFloatComplex const* const* Rarray,*/
-                      sycl::float2 const *const *Rarray,
-                      /* DPCT_ORIG     cuFloatComplex const* const* Carray,*/
-                      sycl::float2 const *const *Carray,
-                      /* DPCT_ORIG     cuFloatComplex** Aarray, int64_t lda,*/
-                      sycl::float2 **Aarray, int64_t lda, int64_t batch_count,
-                      blas::Queue &queue);
+gescale_row_col_batch(
+    Equed equed, int64_t m, int64_t n,
+    sycl::float2 const *const *Rarray,
+    sycl::float2 const *const *Carray,
+    sycl::float2 **Aarray, int64_t lda,
+    int64_t batch_count, blas::Queue& queue);
 
 template void
-gescale_row_col_batch(Equed equed, int64_t m, int64_t n,
-                      /* DPCT_ORIG     cuDoubleComplex const* const* Rarray,*/
-                      sycl::double2 const *const *Rarray,
-                      /* DPCT_ORIG     cuDoubleComplex const* const* Carray,*/
-                      sycl::double2 const *const *Carray,
-                      /* DPCT_ORIG     cuDoubleComplex** Aarray, int64_t lda,*/
-                      sycl::double2 **Aarray, int64_t lda, int64_t batch_count,
-                      blas::Queue &queue);
+gescale_row_col_batch(
+    Equed equed, int64_t m, int64_t n,
+    sycl::double2 const *const *Rarray,
+    sycl::double2 const *const *Carray,
+    sycl::double2 **Aarray, int64_t lda,
+    int64_t batch_count, blas::Queue& queue);
 
 } // namespace device
 } // namespace slate

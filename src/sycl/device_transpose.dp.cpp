@@ -4,11 +4,9 @@
 // the terms of the BSD 3-Clause license. See the accompanying LICENSE file.
 
 #include <sycl/sycl.hpp>
-#include <dpct/dpct.hpp>
 #include "slate/Exception.hh"
 #include "slate/internal/device.hh"
 
-/* DPCT_ORIG #include "device_util.cuh"*/
 #include "device_util.dp.hpp"
 
 #include <cstdio>
@@ -51,55 +49,37 @@ static const int ib = 16;
 ///   [ A30   A31   A32 ]                  [ A40 A41 A42 | A02 A12 ]
 ///   [ A40   A41   A42 ]
 ///
-/* DPCT_ORIG template <typename scalar_t>
-__device__ void transpose_func(
+template <typename scalar_t>
+void transpose_func(
     bool is_conj,
     int n,
-    scalar_t* A, int64_t lda)*/
-template <typename scalar_t>
-void transpose_func(bool is_conj, int n, scalar_t *A, int64_t lda,
-                    const sycl::nd_item<3> &item_ct1,
-                    sycl::local_accessor<scalar_t, 2> sA1,
-                    sycl::local_accessor<scalar_t, 2> sA2,
-                    sycl::local_accessor<scalar_t, 2> sA)
+    scalar_t *A, int64_t lda,
+    const sycl::nd_item<3> &item_ct1,
+    sycl::local_accessor<scalar_t, 2> sA1,
+    sycl::local_accessor<scalar_t, 2> sA2,
+    sycl::local_accessor<scalar_t, 2> sA)
 {
-    // +1 to avoid memory bank conflicts.
-/* DPCT_ORIG     __shared__ scalar_t sA1[ ib ][ ib+1 ]*/
-
-/* DPCT_ORIG     __shared__ scalar_t sA2[ ib ][ ib+1 ]*/
-
     // i, j are row & column indices of top-left corner of each block.
     // ii, jj are row & column offsets within each block.
-/* DPCT_ORIG     int ii = threadIdx.x*/
     int ii = item_ct1.get_local_id(2);
-/* DPCT_ORIG     int jj = threadIdx.y*/
     int jj = item_ct1.get_local_id(1);
 
     int i, j;
-/* DPCT_ORIG     if (gridDim.y - 1 == gridDim.z*2) {*/
     if (item_ct1.get_group_range(1) - 1 == item_ct1.get_group_range(0) * 2) {
         // Even number of blocks.
         //assert( ceildiv(n, ib) % 2 == 0 );
-/* DPCT_ORIG         bool lower = (blockIdx.y > blockIdx.z)*/
         bool lower = (item_ct1.get_group(1) > item_ct1.get_group(0));
-/* DPCT_ORIG         i = (lower ? (blockIdx.y - 1) : (blockIdx.z +
- * gridDim.z))*/
         i = (lower ? (item_ct1.get_group(1) - 1)
                    : (item_ct1.get_group(0) + item_ct1.get_group_range(0)));
-/* DPCT_ORIG         j = (lower ? (blockIdx.z    ) : (blockIdx.y +
- * gridDim.z))*/
         j = (lower ? (item_ct1.get_group(0))
                    : (item_ct1.get_group(1) + item_ct1.get_group_range(0)));
     }
     else {
         // Odd number of blocks.
         //assert( ceildiv(n, ib) % 2 == 1 );
-/* DPCT_ORIG         bool lower = (blockIdx.y >= blockIdx.z)*/
         bool lower = (item_ct1.get_group(1) >= item_ct1.get_group(0));
-/* DPCT_ORIG         i = (lower ? blockIdx.y : (blockIdx.z + gridDim.z - 1))*/
         i = (lower ? item_ct1.get_group(1)
                    : (item_ct1.get_group(0) + item_ct1.get_group_range(0) - 1));
-/* DPCT_ORIG         j = (lower ? blockIdx.z : (blockIdx.y + gridDim.z    ))*/
         j = (lower ? item_ct1.get_group(0)
                    : (item_ct1.get_group(1) + item_ct1.get_group_range(0)));
     }
@@ -112,12 +92,6 @@ void transpose_func(bool is_conj, int n, scalar_t *A, int64_t lda,
         if (i + ii < n  &&  j + jj < n) {
             sA1[jj][ii] = *A1;
         }
-/* DPCT_ORIG         __syncthreads()*/
-        /*
-        DPCT1065:62: Consider replacing sycl::nd_item::barrier() with
-        sycl::nd_item::barrier(sycl::access::fence_space::local_space) for
-        better performance if there is no access to global memory.
-        */
         item_ct1.barrier();
 
         // Save transposed block, A(i, j) = trans(sA1).
@@ -137,12 +111,6 @@ void transpose_func(bool is_conj, int n, scalar_t *A, int64_t lda,
         if (j + ii < n  &&  i + jj < n) {
             sA2[jj][ii] = *A2;
         }
-/* DPCT_ORIG         __syncthreads()*/
-        /*
-        DPCT1065:63: Consider replacing sycl::nd_item::barrier() with
-        sycl::nd_item::barrier(sycl::access::fence_space::local_space) for
-        better performance if there is no access to global memory.
-        */
         item_ct1.barrier();
 
         // Save transposed blocks, A(i, j) = trans(sA2), A(j, i) = trans(sA1).
@@ -185,29 +153,20 @@ static const int NY = 8;   ///< y dim of thread block size for transpose_func
 ///     save 32x16 subtile as 2*2 blocks of 16x8 columns: (AT11 AT12)
 ///                                                       (AT21 AT22)
 ///
-/* DPCT_ORIG template <typename scalar_t, int NX>
-__device__ void transpose_func(
+template <typename scalar_t, int NX>
+void transpose_func(
     bool is_conj,
     int m, int n,
-    const scalar_t *A,  int64_t lda,
-          scalar_t *AT, int64_t ldat)*/
-template <typename scalar_t, int NX>
-void transpose_func(bool is_conj, int m, int n, const scalar_t *A, int64_t lda,
-                    scalar_t *AT, int64_t ldat,
-                    const sycl::nd_item<3> &item_ct1,
-                    sycl::local_accessor<scalar_t, 2> sA1,
-                    sycl::local_accessor<scalar_t, 2> sA2,
-                    sycl::local_accessor<scalar_t, 2> sA)
+    const scalar_t *A, int64_t lda,
+    scalar_t *AT, int64_t ldat,
+    const sycl::nd_item<3> &item_ct1,
+    sycl::local_accessor<scalar_t, 2> sA1,
+    sycl::local_accessor<scalar_t, 2> sA2,
+    sycl::local_accessor<scalar_t, 2> sA)
 {
-/* DPCT_ORIG     __shared__ scalar_t sA[NB][NX+1]*/
-
-/* DPCT_ORIG     int tx  = threadIdx.x*/
     int tx = item_ct1.get_local_id(2);
-/* DPCT_ORIG     int ty  = threadIdx.y*/
     int ty = item_ct1.get_local_id(1);
-/* DPCT_ORIG     int iby = blockIdx.y*NB*/
     int iby = item_ct1.get_group(1) * NB;
-/* DPCT_ORIG     int ibz = blockIdx.z*NB*/
     int ibz = item_ct1.get_group(0) * NB;
     int i, j;
 
@@ -237,12 +196,6 @@ void transpose_func(bool is_conj, int m, int n, const scalar_t *A, int64_t lda,
                 }
             }
         }
-/* DPCT_ORIG         __syncthreads()*/
-        /*
-        DPCT1065:64: Consider replacing sycl::nd_item::barrier() with
-        sycl::nd_item::barrier(sycl::access::fence_space::local_space) for
-        better performance if there is no access to global memory.
-        */
         item_ct1.barrier();
 
         // save NB-by-NX subtile from sA into AT
@@ -259,12 +212,6 @@ void transpose_func(bool is_conj, int m, int n, const scalar_t *A, int64_t lda,
                 }
             }
         }
-/* DPCT_ORIG         __syncthreads()*/
-        /*
-        DPCT1065:65: Consider replacing sycl::nd_item::barrier() with
-        sycl::nd_item::barrier(sycl::access::fence_space::local_space) for
-        better performance if there is no access to global memory.
-        */
         item_ct1.barrier();
 
         // move to next subtile
@@ -275,36 +222,31 @@ void transpose_func(bool is_conj, int m, int n, const scalar_t *A, int64_t lda,
 
 //------------------------------------------------------------------------------
 /// in-place transpose of a square buffer
-/* DPCT_ORIG template <typename scalar_t>
-__global__ void transpose_kernel(
+template <typename scalar_t>
+void transpose_kernel(
     bool is_conj,
     int n,
-    scalar_t* A, int64_t lda)*/
-template <typename scalar_t>
-void transpose_kernel(bool is_conj, int n, scalar_t *A, int64_t lda,
-                      const sycl::nd_item<3> &item_ct1,
-                      sycl::local_accessor<scalar_t, 2> sA1,
-                      sycl::local_accessor<scalar_t, 2> sA2,
-                      sycl::local_accessor<scalar_t, 2> sA)
+    scalar_t *A, int64_t lda,
+    const sycl::nd_item<3> &item_ct1,
+    sycl::local_accessor<scalar_t, 2> sA1,
+    sycl::local_accessor<scalar_t, 2> sA2,
+    sycl::local_accessor<scalar_t, 2> sA)
 {
     transpose_func(is_conj, n, A, lda, item_ct1, sA1, sA2, sA);
 }
 
 //------------------------------------------------------------------------------
 /// in-place transpose of array of square buffers
-/* DPCT_ORIG template <typename scalar_t>
-__global__ void transpose_batch_kernel(
+template <typename scalar_t>
+void transpose_batch_kernel(
     bool is_conj,
     int n,
-    scalar_t** Aarray, int64_t lda)*/
-template <typename scalar_t>
-void transpose_batch_kernel(bool is_conj, int n, scalar_t **Aarray, int64_t lda,
-                            const sycl::nd_item<3> &item_ct1,
-                            sycl::local_accessor<scalar_t, 2> sA1,
-                            sycl::local_accessor<scalar_t, 2> sA2,
-                            sycl::local_accessor<scalar_t, 2> sA)
+    scalar_t **Aarray, int64_t lda,
+    const sycl::nd_item<3> &item_ct1,
+    sycl::local_accessor<scalar_t, 2> sA1,
+    sycl::local_accessor<scalar_t, 2> sA2,
+    sycl::local_accessor<scalar_t, 2> sA)
 {
-/* DPCT_ORIG     transpose_func(is_conj, n, Aarray[blockIdx.x], lda)*/
     transpose_func(is_conj, n, Aarray[item_ct1.get_group(2)], lda, item_ct1, sA1, sA2, sA);
 }
 
@@ -312,48 +254,40 @@ void transpose_batch_kernel(bool is_conj, int n, scalar_t **Aarray, int64_t lda,
 /// out-of-place transpose of a rectangular buffer
 /// transopses A onto AT
 ///
-/* DPCT_ORIG template <typename scalar_t, int NX>
-__global__ void transpose_kernel(
+template <typename scalar_t, int NX>
+void transpose_kernel(
     bool is_conj,
     int m, int n,
-    const scalar_t *A,  int64_t lda,
-          scalar_t *AT, int64_t ldat)*/
-template <typename scalar_t, int NX>
-void transpose_kernel(bool is_conj, int m, int n, const scalar_t *A,
-                      int64_t lda, scalar_t *AT, int64_t ldat,
-                      const sycl::nd_item<3> &item_ct1,
-                      sycl::local_accessor<scalar_t, 2> sA1,
-                      sycl::local_accessor<scalar_t, 2> sA2,
-                      sycl::local_accessor<scalar_t, 2> sA)
+    const scalar_t *A, int64_t lda,
+    scalar_t *AT, int64_t ldat,
+    const sycl::nd_item<3> &item_ct1,
+    sycl::local_accessor<scalar_t, 2> sA1,
+    sycl::local_accessor<scalar_t, 2> sA2,
+    sycl::local_accessor<scalar_t, 2> sA)
 {
-    transpose_func<scalar_t, NX>(is_conj, m, n, A, lda, AT, ldat, item_ct1, sA1,
-                                 sA2, sA);
+    transpose_func<scalar_t, NX>(is_conj, m, n, A, lda, AT, ldat, item_ct1, sA1, sA2, sA);
 }
 
 //------------------------------------------------------------------------------
 /// out-of-place transpose of an array of rectangular buffers
 /// transopses dA_array onto dAT_array
 ///
-/* DPCT_ORIG template <typename scalar_t, int NX>
-__global__ void transpose_batch_kernel(
+template <typename scalar_t, int NX>
+void transpose_batch_kernel(
     bool is_conj,
     int m, int n,
-    scalar_t **dA_array,  int64_t lda,
-    scalar_t **dAT_array, int64_t ldat)*/
-template <typename scalar_t, int NX>
-void transpose_batch_kernel(bool is_conj, int m, int n, scalar_t **dA_array,
-                            int64_t lda, scalar_t **dAT_array, int64_t ldat,
-                            const sycl::nd_item<3> &item_ct1,
-                            sycl::local_accessor<scalar_t, 2> sA1,
-                            sycl::local_accessor<scalar_t, 2> sA2,
-                            sycl::local_accessor<scalar_t, 2> sA)
+    scalar_t **dA_array, int64_t lda,
+    scalar_t **dAT_array, int64_t ldat,
+    const sycl::nd_item<3> &item_ct1,
+    sycl::local_accessor<scalar_t, 2> sA1,
+    sycl::local_accessor<scalar_t, 2> sA2,
+    sycl::local_accessor<scalar_t, 2> sA)
 {
     transpose_func<scalar_t, NX>(
-        /* DPCT_ORIG         is_conj, m, n, dA_array[blockIdx.x], lda,
-           dAT_array[blockIdx.x], ldat )*/
         is_conj,
         m, n, dA_array[item_ct1.get_group(2)], lda,
-        dAT_array[item_ct1.get_group(2)], ldat, item_ct1, sA1, sA2, sA);
+        dAT_array[item_ct1.get_group(2)], ldat,
+        item_ct1, sA1, sA2, sA);
 }
 
 //------------------------------------------------------------------------------
@@ -383,11 +317,6 @@ void transpose(
         return;
     assert(lda >= n);
 
-/* DPCT_ORIG     cudaSetDevice( queue.device() )*/
-    /*
-    DPCT1093:158: The "queue.device()" device may be not the one intended for
-    use. Adjust the selected device if needed.
-    */
     dpct::select_device(queue.device());
 
     int nt = ceildiv( n, int64_t(ib) );
@@ -395,76 +324,37 @@ void transpose(
 
     // Need 1/2 * (nt + 1) * nt to cover lower triangle and diagonal of matrix.
     // Block assignment differs depending on whether nt is odd or even.
-/* DPCT_ORIG     dim3 blocks*/
     sycl::range<3> blocks(1, 1, 1);
     if (nt % 2 == 0) {
         // even blocks
-/* DPCT_ORIG         blocks = { 1, uint(nt + 1), uint(nt/2) }*/
         blocks = sycl::range<3>(uint(nt / 2), uint(nt + 1), 1);
     }
     else {
         // odd blocks
-/* DPCT_ORIG         blocks = { 1, uint(nt), uint((nt + 1)/2) }*/
         blocks = sycl::range<3>(uint((nt + 1) / 2), uint(nt), 1);
     }
-/* DPCT_ORIG     dim3 threads( ib, ib )*/
     sycl::range<3> threads(1, ib, ib);
 
-/* DPCT_ORIG     transpose_kernel<<< blocks, threads, 0, queue.stream() >>>
-        (is_conj, n, A, lda)*/
-    /*
-    DPCT1049:66: The work-group size passed to the SYCL kernel may exceed the
-    limit. To get the device limit, query info::device::max_work_group_size.
-    Adjust the work-group size if needed.
-    */
     ((sycl::queue *)(&queue.stream()))->submit([&](sycl::handler &cgh) {
         // accessors to device memory
-        /*
-        DPCT1101:176: 'ib' expression was replaced with a value. Modify the code
-        to use the original expression, provided in comments, if it is correct.
-        */
-        /*
-        DPCT1101:177: 'ib+1' expression was replaced with a value. Modify the
-        code to use the original expression, provided in comments, if it is
-        correct.
-        */
         sycl::local_accessor<scalar_t, 2> sA1_acc_ct1(
             sycl::range<2>(16 /*ib*/, 17 /*ib+1*/), cgh);
-        /*
-        DPCT1101:178: 'ib' expression was replaced with a value. Modify the code
-        to use the original expression, provided in comments, if it is correct.
-        */
-        /*
-        DPCT1101:179: 'ib+1' expression was replaced with a value. Modify the
-        code to use the original expression, provided in comments, if it is
-        correct.
-        */
         sycl::local_accessor<scalar_t, 2> sA2_acc_ct1(
             sycl::range<2>(16 /*ib*/, 17 /*ib+1*/), cgh);
-        /*
-        DPCT1101:180: 'NB' expression was replaced with a value. Modify the code
-        to use the original expression, provided in comments, if it is correct.
-        */
         sycl::local_accessor<scalar_t, 2> sA_acc_ct1(
-            sycl::range<2>(
-                32 /*NB*/,
-                // dpct_placeholder /*Fix the type mannually*/ + 1),
-                16 /*Fix the type mannually*/ + 1),
-            cgh);
-
+            sycl::range<2>(32 /*NB*/, /*ib+1*/ 16 + 1), cgh);
         cgh.parallel_for(sycl::nd_range<3>(blocks * threads, threads),
                          [=](sycl::nd_item<3> item_ct1) {
                              transpose_kernel(is_conj, n, A, lda, item_ct1, sA1_acc_ct1, sA2_acc_ct1, sA_acc_ct1);
                          });
     });
 
-/* DPCT_ORIG     cudaError_t error = cudaGetLastError()*/
+    /* DPCT_ORIG     cudaError_t error = cudaGetLastError()*/
     /*
     DPCT1010:159: SYCL uses exceptions to report errors and does not use the
     error codes. The call was replaced with 0. You need to rewrite this code.
     */
     dpct::err0 error = 0;
-/* DPCT_ORIG     slate_assert(error == cudaSuccess)*/
     slate_assert(error == 0);
 }
 
@@ -501,11 +391,6 @@ void transpose_batch(
         return;
     assert(lda >= n);
 
-/* DPCT_ORIG     cudaSetDevice( queue.device() )*/
-    /*
-    DPCT1093:160: The "queue.device()" device may be not the one intended for
-    use. Adjust the selected device if needed.
-    */
     dpct::select_device(queue.device());
 
     int nt = ceildiv( n, int64_t(ib) );
@@ -514,77 +399,38 @@ void transpose_batch(
 
     // Need 1/2 * (nt + 1) * nt to cover lower triangle and diagonal of matrix.
     // Block assignment differs depending on whether nt is odd or even.
-/* DPCT_ORIG     dim3 blocks*/
     sycl::range<3> blocks(1, 1, 1);
     if (nt % 2 == 0) {
         // even blocks
-/* DPCT_ORIG         blocks = { uint(batch_count), uint(nt + 1), uint(nt/2) }*/
         blocks = sycl::range<3>(uint(nt / 2), uint(nt + 1), uint(batch_count));
     }
     else {
         // odd blocks
-/* DPCT_ORIG         blocks = { uint(batch_count), uint(nt), uint((nt + 1)/2)
- * }*/
         blocks = sycl::range<3>(uint((nt + 1) / 2), uint(nt), uint(batch_count));
     }
-/* DPCT_ORIG     dim3 threads( ib, ib )*/
     sycl::range<3> threads(1, ib, ib);
 
-/* DPCT_ORIG     transpose_batch_kernel<<< blocks, threads, 0, queue.stream()
-   >>> ( is_conj, n, Aarray, lda )*/
-    /*
-    DPCT1049:67: The work-group size passed to the SYCL kernel may exceed the
-    limit. To get the device limit, query info::device::max_work_group_size.
-    Adjust the work-group size if needed.
-    */
     ((sycl::queue *)(&queue.stream()))->submit([&](sycl::handler &cgh) {
         // accessors to device memory
-        /*
-        DPCT1101:181: 'ib' expression was replaced with a value. Modify the code
-        to use the original expression, provided in comments, if it is correct.
-        */
-        /*
-        DPCT1101:182: 'ib+1' expression was replaced with a value. Modify the
-        code to use the original expression, provided in comments, if it is
-        correct.
-        */
         sycl::local_accessor<scalar_t, 2> sA1_acc_ct1(
             sycl::range<2>(16 /*ib*/, 17 /*ib+1*/), cgh);
-        /*
-        DPCT1101:183: 'ib' expression was replaced with a value. Modify the code
-        to use the original expression, provided in comments, if it is correct.
-        */
-        /*
-        DPCT1101:184: 'ib+1' expression was replaced with a value. Modify the
-        code to use the original expression, provided in comments, if it is
-        correct.
-        */
         sycl::local_accessor<scalar_t, 2> sA2_acc_ct1(
             sycl::range<2>(16 /*ib*/, 17 /*ib+1*/), cgh);
-        /*
-        DPCT1101:185: 'NB' expression was replaced with a value. Modify the code
-        to use the original expression, provided in comments, if it is correct.
-        */
         sycl::local_accessor<scalar_t, 2> sA_acc_ct1(
-            sycl::range<2>(
-                32 /*NB*/,
-                // dpct_placeholder /*Fix the type mannually*/ + 1),
-                16 /*Fix the type mannually*/ + 1),
+            sycl::range<2>(32 /*NB*/, 16 /*ib*/ + 1),
             cgh);
-
         cgh.parallel_for(sycl::nd_range<3>(blocks * threads, threads),
                          [=](sycl::nd_item<3> item_ct1) {
                              transpose_batch_kernel(is_conj, n, Aarray, lda, item_ct1, sA1_acc_ct1, sA2_acc_ct1, sA_acc_ct1);
                          });
     });
 
-/* DPCT_ORIG     cudaError_t error = cudaGetLastError()*/
+    /* DPCT_ORIG     cudaError_t error = cudaGetLastError()*/
     /*
     DPCT1010:161: SYCL uses exceptions to report errors and does not use the
     error codes. The call was replaced with 0. You need to rewrite this code.
     */
     dpct::err0 error = 0;
-/* DPCT_ORIG     slate_assert(error == cudaSuccess)*/
     slate_assert(error == 0);
 }
 
@@ -626,11 +472,6 @@ void transpose(
     assert(lda >= m);
     assert(ldat >= n);
 
-/* DPCT_ORIG     cudaSetDevice( queue.device() )*/
-    /*
-    DPCT1093:162: The "queue.device()" device may be not the one intended for
-    use. Adjust the selected device if needed.
-    */
     dpct::select_device(queue.device());
 
     int mt = ceildiv( m, int64_t(NB) );
@@ -638,52 +479,17 @@ void transpose(
     int nt = ceildiv( n, int64_t(NB) );
     assert(nt <= 65535);                // CUDA limitation
 
-/* DPCT_ORIG     dim3 grid( 1, mt, nt )*/
     sycl::range<3> grid(nt, mt, 1);
-/* DPCT_ORIG     dim3 threads( NX, NY )*/
     sycl::range<3> threads(1, NY, NX);
-/* DPCT_ORIG     transpose_kernel<scalar_t, NX><<< grid, threads, 0,
-   queue.stream() >>> ( is_conj, m, n, dA, lda, dAT, ldat )*/
-    /*
-    DPCT1049:68: The work-group size passed to the SYCL kernel may exceed the
-    limit. To get the device limit, query info::device::max_work_group_size.
-    Adjust the work-group size if needed.
-    */
     ((sycl::queue *)(&queue.stream()))->submit([&](sycl::handler &cgh) {
         // accessors to device memory
-        /*
-        DPCT1101:186: 'ib' expression was replaced with a value. Modify the code
-        to use the original expression, provided in comments, if it is correct.
-        */
-        /*
-        DPCT1101:187: 'ib+1' expression was replaced with a value. Modify the
-        code to use the original expression, provided in comments, if it is
-        correct.
-        */
         sycl::local_accessor<scalar_t, 2> sA1_acc_ct1(
             sycl::range<2>(16 /*ib*/, 17 /*ib+1*/), cgh);
-        /*
-        DPCT1101:188: 'ib' expression was replaced with a value. Modify the code
-        to use the original expression, provided in comments, if it is correct.
-        */
-        /*
-        DPCT1101:189: 'ib+1' expression was replaced with a value. Modify the
-        code to use the original expression, provided in comments, if it is
-        correct.
-        */
         sycl::local_accessor<scalar_t, 2> sA2_acc_ct1(
             sycl::range<2>(16 /*ib*/, 17 /*ib+1*/), cgh);
-        /*
-        DPCT1101:190: 'NB' expression was replaced with a value. Modify the code
-        to use the original expression, provided in comments, if it is correct.
-        */
         sycl::local_accessor<scalar_t, 2> sA_acc_ct1(
-            sycl::range<2>(
-                32 /*NB*/,
-                // dpct_placeholder /*Fix the type mannually*/ + 1),
-                16 /*Fix the type mannually*/ + 1),
+            sycl::range<2>( 32 /*NB*/, 16 /*ib*/ + 1),
             cgh);
-
         cgh.parallel_for(sycl::nd_range<3>(grid * threads, threads),
                          [=](sycl::nd_item<3> item_ct1) {
                              transpose_kernel<scalar_t, NX>(
@@ -692,13 +498,12 @@ void transpose(
                          });
     });
 
-/* DPCT_ORIG     cudaError_t error = cudaGetLastError()*/
+    /* DPCT_ORIG     cudaError_t error = cudaGetLastError()*/
     /*
     DPCT1010:163: SYCL uses exceptions to report errors and does not use the
     error codes. The call was replaced with 0. You need to rewrite this code.
     */
     dpct::err0 error = 0;
-/* DPCT_ORIG     slate_assert(error == cudaSuccess)*/
     slate_assert(error == 0);
 }
 
@@ -748,11 +553,6 @@ void transpose_batch(
     assert(lda >= m);
     assert(ldat >= n);
 
-/* DPCT_ORIG     cudaSetDevice( queue.device() )*/
-    /*
-    DPCT1093:164: The "queue.device()" device may be not the one intended for
-    use. Adjust the selected device if needed.
-    */
     dpct::select_device(queue.device());
 
     int mt = ceildiv( m, int64_t(NB) );
@@ -761,52 +561,17 @@ void transpose_batch(
     assert(nt <= 65535);                // CUDA limitation
     assert(batch_count <= 2147483647);  // CUDA limitation, 2^31 - 1
 
-/* DPCT_ORIG     dim3 grid( uint(batch_count), mt, nt )*/
     sycl::range<3> grid(nt, mt, uint(batch_count));
-/* DPCT_ORIG     dim3 threads( NX, NY, 1 )*/
     sycl::range<3> threads(1, NY, NX);
-/* DPCT_ORIG     transpose_batch_kernel<scalar_t, NX><<< grid, threads, 0,
-   queue.stream() >>> ( is_conj, m, n, dA_array, lda, dAT_array, ldat )*/
-    /*
-    DPCT1049:69: The work-group size passed to the SYCL kernel may exceed the
-    limit. To get the device limit, query info::device::max_work_group_size.
-    Adjust the work-group size if needed.
-    */
     ((sycl::queue *)(&queue.stream()))->submit([&](sycl::handler &cgh) {
         // accessors to device memory
-        /*
-        DPCT1101:191: 'ib' expression was replaced with a value. Modify the code
-        to use the original expression, provided in comments, if it is correct.
-        */
-        /*
-        DPCT1101:192: 'ib+1' expression was replaced with a value. Modify the
-        code to use the original expression, provided in comments, if it is
-        correct.
-        */
         sycl::local_accessor<scalar_t, 2> sA1_acc_ct1(
             sycl::range<2>(16 /*ib*/, 17 /*ib+1*/), cgh);
-        /*
-        DPCT1101:193: 'ib' expression was replaced with a value. Modify the code
-        to use the original expression, provided in comments, if it is correct.
-        */
-        /*
-        DPCT1101:194: 'ib+1' expression was replaced with a value. Modify the
-        code to use the original expression, provided in comments, if it is
-        correct.
-        */
         sycl::local_accessor<scalar_t, 2> sA2_acc_ct1(
             sycl::range<2>(16 /*ib*/, 17 /*ib+1*/), cgh);
-        /*
-        DPCT1101:195: 'NB' expression was replaced with a value. Modify the code
-        to use the original expression, provided in comments, if it is correct.
-        */
         sycl::local_accessor<scalar_t, 2> sA_acc_ct1(
-            sycl::range<2>(
-                32 /*NB*/,
-                // dpct_placeholder /*Fix the type mannually*/ + 1),
-                16 /*Fix the type mannually*/ + 1),
+            sycl::range<2>(32 /*NB*/, 16 /*ib*/ + 1),
             cgh);
-
         cgh.parallel_for(sycl::nd_range<3>(grid * threads, threads),
                          [=](sycl::nd_item<3> item_ct1) {
                              transpose_batch_kernel<scalar_t, NX>(
@@ -816,13 +581,12 @@ void transpose_batch(
                          });
     });
 
-/* DPCT_ORIG     cudaError_t error = cudaGetLastError()*/
+    /* DPCT_ORIG     cudaError_t error = cudaGetLastError()*/
     /*
     DPCT1010:165: SYCL uses exceptions to report errors and does not use the
     error codes. The call was replaced with 0. You need to rewrite this code.
     */
     dpct::err0 error = 0;
-/* DPCT_ORIG     slate_assert(error == cudaSuccess)*/
     slate_assert(error == 0);
 }
 
@@ -842,13 +606,17 @@ void transpose(
     double* A, int64_t lda,
     blas::Queue& queue);
 
-template void transpose(bool is_conj, int64_t n,
-                        /* DPCT_ORIG     cuFloatComplex* A, int64_t lda,*/
-                        sycl::float2 *A, int64_t lda, blas::Queue &queue);
+template void transpose(
+    bool is_conj,
+    int64_t n,
+    sycl::float2 *A, int64_t lda,
+    blas::Queue& queue);
 
-template void transpose(bool is_conj, int64_t n,
-                        /* DPCT_ORIG     cuDoubleComplex* A, int64_t lda,*/
-                        sycl::double2 *A, int64_t lda, blas::Queue &queue);
+template void transpose(
+    bool is_conj,
+    int64_t n,
+    sycl::double2 *A, int64_t lda,
+    blas::Queue& queue);
 
 // ----------------------------------------
 template
@@ -868,16 +636,18 @@ void transpose_batch(
     blas::Queue& queue);
 
 template void
-transpose_batch(bool is_conj, int64_t n,
-                /* DPCT_ORIG     cuFloatComplex** Aarray, int64_t lda,*/
-                sycl::float2 **Aarray, int64_t lda, int64_t batch_count,
-                blas::Queue &queue);
+transpose_batch(
+    bool is_conj,
+    int64_t n,
+    sycl::float2 **Aarray, int64_t lda,
+    int64_t batch_count, blas::Queue& queue);
 
 template void
-transpose_batch(bool is_conj, int64_t n,
-                /* DPCT_ORIG     cuDoubleComplex** Aarray, int64_t lda,*/
-                sycl::double2 **Aarray, int64_t lda, int64_t batch_count,
-                blas::Queue &queue);
+transpose_batch(
+    bool is_conj,
+    int64_t n,
+    sycl::double2 **Aarray, int64_t lda,
+    int64_t batch_count, blas::Queue& queue);
 
 // ----------------------------------------
 template<>
@@ -913,24 +683,24 @@ void transpose(
 }
 
 template <>
-void transpose(bool is_conj, int64_t m, int64_t n,
-               /* DPCT_ORIG     cuFloatComplex* dA,  int64_t lda,*/
-               sycl::float2 *dA, int64_t lda,
-               /* DPCT_ORIG     cuFloatComplex* dAT, int64_t ldat,*/
-               sycl::float2 *dAT, int64_t ldat, blas::Queue &queue)
+void transpose(
+    bool is_conj,
+    int64_t m, int64_t n,
+    sycl::float2 *dA, int64_t lda,
+    sycl::float2 *dAT, int64_t ldat,
+    blas::Queue& queue)
 {
-/* DPCT_ORIG     transpose<cuFloatComplex,32>(*/
     transpose<sycl::float2, 32>(is_conj, m, n, dA, lda, dAT, ldat, queue);
 }
 
 template <>
-void transpose(bool is_conj, int64_t m, int64_t n,
-               /* DPCT_ORIG     cuDoubleComplex* dA,  int64_t lda,*/
-               sycl::double2 *dA, int64_t lda,
-               /* DPCT_ORIG     cuDoubleComplex* dAT, int64_t ldat,*/
-               sycl::double2 *dAT, int64_t ldat, blas::Queue &queue)
+void transpose(
+    bool is_conj,
+    int64_t m, int64_t n,
+    sycl::double2 *dA, int64_t lda,
+    sycl::double2 *dAT, int64_t ldat,
+    blas::Queue& queue)
 {
-/* DPCT_ORIG     transpose<cuDoubleComplex,16>(*/
     transpose<sycl::double2, 16>(is_conj, m, n, dA, lda, dAT, ldat, queue);
 }
 
@@ -973,14 +743,12 @@ void transpose_batch(
 
 template <>
 void transpose_batch(
-    bool is_conj, int64_t m, int64_t n,
-    /* DPCT_ORIG     cuFloatComplex **dA_array,  int64_t lda,*/
+    bool is_conj,
+    int64_t m, int64_t n,
     sycl::float2 **dA_array, int64_t lda,
-    /* DPCT_ORIG     cuFloatComplex **dAT_array, int64_t ldat,*/
-    sycl::float2 **dAT_array, int64_t ldat, int64_t batch_count,
-    blas::Queue &queue)
+    sycl::float2 **dAT_array, int64_t ldat,
+    int64_t batch_count, blas::Queue& queue)
 {
-/* DPCT_ORIG     transpose_batch<cuFloatComplex,32>(*/
     transpose_batch<sycl::float2, 32>(
         is_conj, m, n, dA_array, lda, dAT_array, ldat, batch_count, queue );
 }
@@ -988,13 +756,10 @@ void transpose_batch(
 template <>
 void transpose_batch(
     bool is_conj, int64_t m, int64_t n,
-    /* DPCT_ORIG     cuDoubleComplex **dA_array,  int64_t lda,*/
     sycl::double2 **dA_array, int64_t lda,
-    /* DPCT_ORIG     cuDoubleComplex **dAT_array, int64_t ldat,*/
-    sycl::double2 **dAT_array, int64_t ldat, int64_t batch_count,
-    blas::Queue &queue)
+    sycl::double2 **dAT_array, int64_t ldat,
+    int64_t batch_count, blas::Queue& queue)
 {
-/* DPCT_ORIG     transpose_batch<cuDoubleComplex,16>(*/
     transpose_batch<sycl::double2, 16>(
         is_conj,
         m, n,
